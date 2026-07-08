@@ -1,0 +1,27 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv/
+venv/
+env/
+
+# Django
+*.log
+db.sqlite3
+media/*
+!media/.gitkeep
+staticfiles/
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
