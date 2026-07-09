@@ -5,8 +5,6 @@ from rest_framework.routers import DefaultRouter
 from . import views
 
 router = DefaultRouter()
-router.register(r"licenses", views.LicenseViewSet, basename="license")
-router.register(r"prices", views.AssetPriceViewSet, basename="asset-price")
 router.register(r"orders", views.OrderViewSet, basename="order")
 
 cart_patterns = [
