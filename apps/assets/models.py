@@ -5,12 +5,27 @@ from core.models import BaseModel
 class Category(BaseModel):
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=100, unique=True)
+    code = models.CharField(
+        max_length=10,
+        blank=True,
+        help_text=_("KNA category code, e.g. '1', '10'."),
+    )
     description = models.TextField(blank=True)
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="subcategories",
+        help_text=_("Parent category. NULL for top-level main categories."),
+    )
 
     class Meta:
         verbose_name_plural = "Categories"
 
     def __str__(self):
+        if self.parent:
+            return f"{self.parent.name} → {self.name}"
         return self.name
 
 class Collection(BaseModel):
