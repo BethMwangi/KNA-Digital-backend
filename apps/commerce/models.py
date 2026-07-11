@@ -18,6 +18,59 @@ from core.models import BaseModel
 
 
 # ------------------------------------------------------------------ #
+# License & Pricing
+# ------------------------------------------------------------------ #
+class License(BaseModel):
+    """Usage rights tier — e.g. Editorial, Commercial, Extended."""
+
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    allows_commercial = models.BooleanField(default=False)
+    allows_modification = models.BooleanField(default=False)
+    max_print_run = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=_("Max copies for print use. NULL = unlimited."),
+    )
+
+    class Meta:
+        db_table = "licenses"
+
+    def __str__(self):
+        return self.name
+
+
+class AssetPrice(BaseModel):
+    """
+    Links an asset to a license with a price.
+    One asset can have multiple prices (one per license tier).
+    """
+
+    asset = models.ForeignKey(
+        DigitalAsset,
+        on_delete=models.CASCADE,
+        related_name="prices",
+    )
+    license = models.ForeignKey(
+        License,
+        on_delete=models.PROTECT,
+        related_name="prices",
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text=_("Price in KES."),
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "asset_prices"
+        unique_together = ["asset", "license"]
+
+    def __str__(self):
+        return f"{self.asset.title} — {self.license.name}: KES {self.amount}"
+
 
 # ------------------------------------------------------------------ #
 # Shopping Cart
@@ -54,22 +107,22 @@ class CartItem(BaseModel):
         on_delete=models.CASCADE,
         related_name="items",
     )
-    asset = models.ForeignKey(
-        DigitalAsset,
+    asset_price = models.ForeignKey(
+        AssetPrice,
         on_delete=models.CASCADE,
         related_name="cart_items",
     )
 
     class Meta:
         db_table = "cart_items"
-        unique_together = ["cart", "asset"]
+        unique_together = ["cart", "asset_price"]
 
     def __str__(self):
-        return f"{self.asset.title}"
+        return f"{self.asset_price.asset.title} ({self.asset_price.license.name})"
 
     @property
     def subtotal(self):
-        return self.asset.price
+        return self.asset_price.amount
 
 
 # ------------------------------------------------------------------ #
@@ -121,6 +174,11 @@ class OrderItem(BaseModel):
     )
     asset = models.ForeignKey(
         DigitalAsset,
+        on_delete=models.PROTECT,
+        related_name="order_items",
+    )
+    license = models.ForeignKey(
+        License,
         on_delete=models.PROTECT,
         related_name="order_items",
     )

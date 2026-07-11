@@ -59,7 +59,6 @@ class DigitalAsset(BaseModel):
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="assets")
     collection = models.ForeignKey(Collection, on_delete=models.SET_NULL, null=True, blank=True, related_name="assets")
     tags = models.ManyToManyField(Tag, related_name="assets", blank=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text=_("Price in KES."))
 
     photographer = models.CharField(max_length=255, blank=True)
     photographer_credit = models.CharField(max_length=255, blank=True)
