@@ -117,7 +117,9 @@ class CartItem(BaseModel):
         unique_together = ["cart", "asset_price"]
 
     def __str__(self):
-        return f"{self.asset_price.asset.title} ({self.asset_price.license.name})"
+        asset_title = self.asset_price.asset.title
+        license_name = self.asset_price.license.name
+        return f"{asset_title} ({license_name})"
 
     @property
     def subtotal(self):
