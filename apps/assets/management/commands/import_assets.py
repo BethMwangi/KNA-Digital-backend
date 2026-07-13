@@ -6,7 +6,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from apps.assets.models import AssetMetadata, DigitalAsset
+from apps.assets.models import AssetMetadata, AssetVariant, DigitalAsset
 
 
 class Command(BaseCommand):
@@ -41,27 +41,39 @@ class Command(BaseCommand):
                         except ValueError:
                             pass
 
-                    # Create or update DigitalAsset
-                    asset, created = DigitalAsset.objects.update_or_create(
-                        asset_number=item.get("image_refno"),
-                        defaults={
-                            "title": item.get("image_headline") or "Untitled",
-                            "description": item.get("image_description") or "",
-                            "caption": item.get("image_caption") or "",
-                            "asset_type": DigitalAsset.AssetType.PHOTOGRAPH,
-                            "status": DigitalAsset.Status.PUBLISHED,
-                            "visibility": DigitalAsset.Visibility.PUBLIC,
-                            "source": item.get("image_source") or "",
-                            "photographer": item.get("image_creator") or "",
-                            "capture_date": capture_date,
-                        },
-                    )
+                    image_id = item.get("image_id")
+                    asset_number = item.get("image_refno") or ""
 
-                    # Create or update AssetMetadata
+                    # 1. Try to find an existing asset using the unique image_id
+                    asset = None
+                    if image_id:
+                        existing_meta = AssetMetadata.objects.filter(
+                            legacy_image_id=image_id
+                        ).first()
+                        if existing_meta:
+                            asset = existing_meta.asset
+
+                    if not asset:
+                        asset = DigitalAsset()
+
+                    # 2. Update DigitalAsset fields
+                    asset.asset_number = asset_number
+                    asset.title = item.get("image_headline") or "Untitled"
+                    asset.description = item.get("image_description") or ""
+                    asset.caption = item.get("image_caption") or ""
+                    asset.asset_type = DigitalAsset.AssetType.PHOTOGRAPH
+                    asset.status = DigitalAsset.Status.PUBLISHED
+                    asset.visibility = DigitalAsset.Visibility.PUBLIC
+                    asset.source = item.get("image_source") or ""
+                    asset.photographer = item.get("image_creator") or ""
+                    asset.capture_date = capture_date
+                    asset.save()
+
+                    # 3. Create or update AssetMetadata
                     metadata, meta_created = AssetMetadata.objects.update_or_create(
                         asset=asset,
                         defaults={
-                            "legacy_image_id": item.get("image_id"),
+                            "legacy_image_id": image_id,
                             "headline": item.get("image_headline") or "",
                             "keywords": item.get("image_keywords") or "",
                             "location": item.get("image_scene_location") or "",
@@ -79,6 +91,19 @@ class Command(BaseCommand):
                             "thumbnails": item.get("image_thumbnails") or [],
                         },
                     )
+
+                    # Create AssetVariants for thumbnails
+                    thumbnails = item.get("image_thumbnails") or []
+                    for idx, url in enumerate(thumbnails):
+                        AssetVariant.objects.get_or_create(
+                            asset=asset,
+                            storage_path=url,
+                            defaults={
+                                "variant_name": f"Thumbnail {idx + 1}",
+                                "mime_type": "image/jpeg",  # Assumption, adjust if provided
+                                "file_size": 0,  # We don't have this from the JSON
+                            },
+                        )
 
                     success_count += 1
                 except Exception as e:

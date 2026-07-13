@@ -68,7 +68,7 @@ class DigitalAsset(BaseModel):
         PRIVATE = "private", _("Private")
         RESTRICTED = "restricted", _("Restricted")
 
-    asset_number = models.CharField(max_length=50, unique=True, db_index=True)
+    asset_number = models.CharField(max_length=50, blank=True, db_index=True)
     title = models.CharField(max_length=255, db_index=True)
     description = models.TextField(blank=True)
     caption = models.TextField(blank=True)
