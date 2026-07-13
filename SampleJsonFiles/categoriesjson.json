@@ -1,0 +1,127 @@
+[
+  {
+    "itemCode": 1,
+    "ItemDescription": "Political",
+    "ItemType": "PHTMainCategory"
+  },
+  {
+    "itemCode": 4,
+    "ItemDescription": "Public service",
+    "ItemType": "PHTMainCategory"
+  },
+  {
+    "itemCode": 1,
+    "ItemDescription": "Presidential",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 2,
+    "ItemDescription": "Personality",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 6,
+    "ItemDescription": "Ministry",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 4,
+    "ItemDescription": "Politics",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 9,
+    "ItemDescription": "Health",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 7,
+    "ItemDescription": "Industry",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 16,
+    "ItemDescription": "Security",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 12,
+    "ItemDescription": "Transport",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 3,
+    "ItemDescription": "Colonial affairs",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 5,
+    "ItemDescription": "Agriculture",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 8,
+    "ItemDescription": "Women and children, Scouts, NGOâ€™s and red cross",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 10,
+    "ItemDescription": "Culture",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 11,
+    "ItemDescription": "Sports",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 13,
+    "ItemDescription": "Accidents",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 14,
+    "ItemDescription": "Buildings and monuments",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 15,
+    "ItemDescription": "Celebrations",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 17,
+    "ItemDescription": "Environment",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 18,
+    "ItemDescription": "Religion",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 19,
+    "ItemDescription": "Entertainment",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 21,
+    "ItemDescription": "Education (Academic Celebrations, school, institutions )",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 3,
+    "ItemDescription": "Social",
+    "ItemType": "PHTMainCategory"
+  },
+  {
+    "itemCode": 20,
+    "ItemDescription": "Ceremonies",
+    "ItemType": "PHTSubCategory"
+  },
+  {
+    "itemCode": 2,
+    "ItemDescription": "Economic",
+    "ItemType": "PHTMainCategory"
+  }
+]

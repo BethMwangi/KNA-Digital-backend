@@ -135,6 +135,19 @@ class AssetMetadata(BaseModel):
     headline = models.CharField(max_length=255, blank=True)
     language = models.CharField(max_length=50, blank=True, default="en")
 
+    # New fields for JSON ingestion
+    legacy_image_id = models.UUIDField(null=True, blank=True)
+    intellectual_genre = models.CharField(max_length=100, blank=True)
+    iptc_scene = models.CharField(max_length=100, blank=True)
+    image_source_type = models.CharField(max_length=100, blank=True)
+    image_logos = models.CharField(max_length=255, blank=True)
+    creator_job_title = models.CharField(max_length=100, blank=True)
+    image_dimensions = models.CharField(max_length=100, blank=True)
+    image_remarks = models.TextField(blank=True)
+    main_category_code = models.IntegerField(null=True, blank=True)
+    sub_category_code = models.IntegerField(null=True, blank=True)
+    thumbnails = models.JSONField(default=list, blank=True)
+
     class Meta:
         verbose_name_plural = "Asset Metadata"
 
