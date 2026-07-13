@@ -1,10 +1,9 @@
 """Commerce serializers — Cart, Orders, Licenses, Pricing."""
+
 import uuid
 
 from django.db import transaction
 from rest_framework import serializers
-
-from apps.assets.serializers import DigitalAssetListSerializer
 
 from .models import (
     AssetPrice,
@@ -71,9 +70,9 @@ class AddToCartSerializer(serializers.Serializer):
 
     def validate_asset_price_id(self, value):
         try:
-            price = AssetPrice.objects.get(id=value, is_active=True)
-        except AssetPrice.DoesNotExist:
-            raise serializers.ValidationError("Invalid or inactive asset price.")
+            AssetPrice.objects.get(id=value, is_active=True)
+        except AssetPrice.DoesNotExist as err:
+            raise serializers.ValidationError("Invalid or inactive asset price.") from err
         return value
 
 
@@ -124,8 +123,8 @@ class CheckoutSerializer(serializers.Serializer):
         user = self.context["request"].user
         try:
             cart = ShoppingCart.objects.get(user=user)
-        except ShoppingCart.DoesNotExist:
-            raise serializers.ValidationError({"cart": "Your cart is empty."})
+        except ShoppingCart.DoesNotExist as err:
+            raise serializers.ValidationError({"cart": "Your cart is empty."}) from err
 
         cart_items = cart.items.select_related("asset_price__asset", "asset_price__license").all()
         if not cart_items.exists():

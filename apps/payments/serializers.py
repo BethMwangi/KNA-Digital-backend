@@ -38,11 +38,11 @@ class InitiatePaymentSerializer(serializers.Serializer):
         from apps.commerce.models import Order
 
         try:
-            order = Order.objects.get(id=value, status=Order.Status.PENDING)
-        except Order.DoesNotExist:
+            Order.objects.get(id=value, status=Order.Status.PENDING)
+        except Order.DoesNotExist as err:
             raise serializers.ValidationError(
                 "Order not found or is not in pending status."
-            )
+            ) from err
         return value
 
 

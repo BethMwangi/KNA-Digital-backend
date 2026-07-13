@@ -1,4 +1,5 @@
 """Routes for /api/v1/auth, /api/v1/users and /api/v1/admin/users (SDD §16)."""
+
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 

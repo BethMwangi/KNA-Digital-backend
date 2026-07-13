@@ -5,7 +5,7 @@ The Payment model records every transaction attempt. The actual gateway
 integration (M-Pesa, eCitizen, Visa/MC) lives in gateways.py as adapter
 classes. To add a new provider, just create a new adapter — no model changes.
 """
-from django.conf import settings
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 

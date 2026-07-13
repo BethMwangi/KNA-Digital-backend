@@ -1,0 +1,18 @@
+[tool.black]
+line-length = 100
+target-version = ["py313"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "DJ"]
+ignore = [
+    "E501",  # line length: black already enforces this
+    "DJ012",  # false positive on custom Manager subclasses (objects/all_objects pattern)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "core", "config"]

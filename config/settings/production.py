@@ -1,4 +1,5 @@
 """Production settings (SDD §26, §29)."""
+
 from .base import *  # noqa
 
 DEBUG = False

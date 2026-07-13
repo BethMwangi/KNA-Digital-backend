@@ -1,4 +1,5 @@
 """Accounts serializers — validation lives here, views stay thin."""
+
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -8,7 +9,10 @@ from .tokens import decode_uid, password_reset_token
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Public representation of a user (never exposes password_hash)."""
+    """
+    Public representation of a user (never exposes
+    password_hash).
+    """
 
     full_name = serializers.CharField(read_only=True)
 
@@ -27,13 +31,22 @@ class UserSerializer(serializers.ModelSerializer):
             "last_login",
             "created_at",
         ]
-        read_only_fields = ["id", "email", "role", "account_status", "email_verified", "last_login", "created_at"]
+        read_only_fields = [
+            "id",
+            "email",
+            "role",
+            "account_status",
+            "email_verified",
+            "last_login",
+            "created_at",
+        ]
 
 
 class RegisterSerializer(serializers.ModelSerializer):
     """
-    Public self-registration — always creates a CUSTOMER (SDD §17.3).
-    Staff accounts are created only by admins via AdminUserSerializer.
+    Public self-registration — always creates a CUSTOMER
+    (SDD §17.3). Staff accounts are created only by admins
+    via AdminUserSerializer.
     """
 
     password = serializers.CharField(write_only=True, validators=[validate_password])
@@ -41,7 +54,14 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["first_name", "last_name", "email", "phone_number", "password", "password_confirm"]
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "phone_number",
+            "password",
+            "password_confirm",
+        ]
 
     def validate_email(self, value: str) -> str:
         if User.all_objects.filter(email__iexact=value).exists():
@@ -63,7 +83,8 @@ class LoginSerializer(TokenObtainPairSerializer):
     JWT login. Extends simplejwt to:
     - embed role claims in the access token,
     - block suspended accounts,
-    - return the user profile alongside tokens (SDD §16.5).
+    - return the user profile alongside tokens
+      (SDD §16.5).
     """
 
     @classmethod
@@ -134,11 +155,14 @@ class EmailVerifySerializer(serializers.Serializer):
 
 class AdminUserSerializer(serializers.ModelSerializer):
     """
-    Used by /admin/users endpoints — admins create staff (Content Editors
-    who handle images, other Admins) and can suspend/reactivate accounts.
+    Used by /admin/users endpoints — admins create staff
+    (Content Editors who handle images, other Admins) and
+    can suspend/reactivate accounts.
     """
 
-    password = serializers.CharField(write_only=True, required=False, validators=[validate_password])
+    password = serializers.CharField(
+        write_only=True, required=False, validators=[validate_password]
+    )
 
     class Meta:
         model = User
@@ -159,7 +183,8 @@ class AdminUserSerializer(serializers.ModelSerializer):
 
     def validate_role(self, value):
         requester = self.context["request"].user
-        # Only a Super Admin can grant admin/super-admin roles (SDD §17.4).
+        # Only a Super Admin can grant admin/super-admin
+        # roles (SDD §17.4).
         if value in {Role.ADMIN, Role.SUPER_ADMIN} and not requester.is_super_admin:
             raise serializers.ValidationError("Only a Super Administrator can assign this role.")
         return value

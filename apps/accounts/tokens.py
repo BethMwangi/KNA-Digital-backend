@@ -6,6 +6,7 @@ Uses Django's built-in cryptographic token generator (stateless, no DB
 table needed, invalidated automatically when the password or last_login
 changes) — the same battle-tested mechanism as Django admin resets.
 """
+
 from django.conf import settings
 from django.contrib.auth.tokens import PasswordResetTokenGenerator, default_token_generator
 from django.core.mail import send_mail

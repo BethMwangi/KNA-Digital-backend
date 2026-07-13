@@ -14,10 +14,13 @@ One, so RBAC is enforced in code (see permissions.py). If Phase Two (MMS)
 needs dynamic, admin-editable permissions, this can be migrated to Django's
 Group/Permission tables without touching the API surface.
 """
-from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    PermissionsMixin,
+)
 from django.core.validators import RegexValidator
 from django.db import models
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import BaseModel
@@ -44,7 +47,12 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
 
     first_name = models.CharField(_("first name"), max_length=100)
     last_name = models.CharField(_("last name"), max_length=100)
-    email = models.EmailField(_("email address"), max_length=255, unique=True, db_index=True)
+    email = models.EmailField(
+        _("email address"),
+        max_length=255,
+        unique=True,
+        db_index=True,
+    )
     phone_number = models.CharField(
         _("phone number"),
         max_length=20,
@@ -52,12 +60,16 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
         validators=[
             RegexValidator(
                 regex=r"^\+?[0-9]{7,15}$",
-                message=_("Enter a valid phone number, e.g. +254712345678."),
+                message=_("Enter a valid phone number, " "e.g. +254712345678."),
             )
         ],
     )
     role = models.CharField(
-        _("role"), max_length=32, choices=Role.choices, default=Role.CUSTOMER, db_index=True
+        _("role"),
+        max_length=32,
+        choices=Role.choices,
+        default=Role.CUSTOMER,
+        db_index=True,
     )
     account_status = models.CharField(
         _("account status"),
@@ -137,14 +149,21 @@ class AuditLog(BaseModel):
         LOGOUT = "logout", _("Logout")
         REGISTER = "register", _("Registration")
         PASSWORD_CHANGE = "password_change", _("Password Change")
-        PASSWORD_RESET_REQUEST = "password_reset_request", _("Password Reset Requested")
+        PASSWORD_RESET_REQUEST = (
+            "password_reset_request",
+            _("Password Reset Requested"),
+        )
         PASSWORD_RESET = "password_reset", _("Password Reset")
         EMAIL_VERIFIED = "email_verified", _("Email Verified")
         ROLE_CHANGE = "role_change", _("Role Change")
         USER_CREATED = "user_created", _("User Created")
 
     user = models.ForeignKey(
-        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="audit_logs"
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="audit_logs",
     )
     action = models.CharField(max_length=64, choices=Action.choices, db_index=True)
     resource = models.CharField(max_length=255, blank=True)
@@ -158,7 +177,7 @@ class AuditLog(BaseModel):
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
-        return f"{self.action} by {self.user_id} at {self.created_at:%Y-%m-%d %H:%M}"
+        return f"{self.action} by {self.user_id} at " f"{self.created_at:%Y-%m-%d %H:%M}"
 
 
 def log_event(*, user=None, action: str, request=None, success: bool = True, **metadata):

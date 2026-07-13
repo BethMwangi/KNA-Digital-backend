@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Category, Collection, Tag, DigitalAsset, AssetMetadata, AssetVariant
+from .models import AssetMetadata, AssetVariant, Category, Collection, DigitalAsset, Tag
 
 
 class CategorySerializer(serializers.ModelSerializer):

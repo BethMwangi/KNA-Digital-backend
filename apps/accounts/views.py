@@ -6,6 +6,7 @@ All responses follow the SDD §16.2 envelope:
     {"success": true, "message": "...", "data": {...}}
 via the api_response helper below (core.exceptions handles errors).
 """
+
 from django.utils import timezone
 from rest_framework import generics, status, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -14,7 +15,10 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
 from .models import AuditLog, User, log_event
 from .permissions import IsAccountActive, IsAdminOrAbove, IsSuperAdmin
@@ -36,9 +40,22 @@ from .tokens import (
 )
 
 
-def api_response(*, message: str, data=None, success: bool = True, status_code=status.HTTP_200_OK):
+def api_response(
+    *,
+    message: str,
+    data=None,
+    success: bool = True,
+    status_code=status.HTTP_200_OK,
+):
     """Standard response envelope (SDD §16.2)."""
-    return Response({"success": success, "message": message, "data": data or {}}, status=status_code)
+    return Response(
+        {
+            "success": success,
+            "message": message,
+            "data": data or {},
+        },
+        status=status_code,
+    )
 
 
 class AuthThrottle(AnonRateThrottle):
@@ -60,9 +77,13 @@ class RegisterView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         send_verification_email(user)
-        log_event(user=user, action=AuditLog.Action.REGISTER, request=request)
+        log_event(
+            user=user,
+            action=AuditLog.Action.REGISTER,
+            request=request,
+        )
         return api_response(
-            message="Account created. Please check your email to verify your address.",
+            message=("Account created. Please check your email to " "verify your address."),
             data=UserSerializer(user).data,
             status_code=status.HTTP_201_CREATED,
         )
@@ -83,8 +104,15 @@ class LoginView(TokenObtainPairView):
             if user:
                 user.last_login = timezone.now()
                 user.save(update_fields=["last_login"])
-                log_event(user=user, action=AuditLog.Action.LOGIN, request=request)
-            return api_response(message="Login successful.", data=response.data)
+                log_event(
+                    user=user,
+                    action=AuditLog.Action.LOGIN,
+                    request=request,
+                )
+            return api_response(
+                message="Login successful.",
+                data=response.data,
+            )
         return response
 
 
@@ -121,7 +149,11 @@ class LogoutView(APIView):
                 message="Invalid or already blacklisted token.",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
-        log_event(user=request.user, action=AuditLog.Action.LOGOUT, request=request)
+        log_event(
+            user=request.user,
+            action=AuditLog.Action.LOGOUT,
+            request=request,
+        )
         return api_response(message="Logged out successfully.")
 
 
@@ -138,9 +170,14 @@ class PasswordResetRequestView(APIView):
         user = User.objects.filter(email__iexact=serializer.validated_data["email"]).first()
         if user and not user.is_suspended:
             send_password_reset_email(user)
-            log_event(user=user, action=AuditLog.Action.PASSWORD_RESET_REQUEST, request=request)
-        # Always the same response — never reveal whether an email exists.
-        return api_response(message="If that email is registered, a reset link has been sent.")
+            log_event(
+                user=user,
+                action=AuditLog.Action.PASSWORD_RESET_REQUEST,
+                request=request,
+            )
+        # Always the same response — never reveal whether an email
+        # exists.
+        return api_response(message="If that email is registered, a reset link " "has been sent.")
 
 
 # --------------------------------------------------------------------- #
@@ -154,7 +191,11 @@ class PasswordResetConfirmView(APIView):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        log_event(user=user, action=AuditLog.Action.PASSWORD_RESET, request=request)
+        log_event(
+            user=user,
+            action=AuditLog.Action.PASSWORD_RESET,
+            request=request,
+        )
         return api_response(message="Password has been reset. You can now log in.")
 
 
@@ -169,14 +210,20 @@ class EmailVerifyView(APIView):
         serializer = EmailVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = decode_uid(serializer.validated_data["uid"])
-        if user is None or not email_verification_token.check_token(user, serializer.validated_data["token"]):
+        if user is None or not email_verification_token.check_token(
+            user, serializer.validated_data["token"]
+        ):
             return api_response(
                 success=False,
                 message="Invalid or expired verification link.",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
         user.mark_email_verified()
-        log_event(user=user, action=AuditLog.Action.EMAIL_VERIFIED, request=request)
+        log_event(
+            user=user,
+            action=AuditLog.Action.EMAIL_VERIFIED,
+            request=request,
+        )
         return api_response(message="Email verified successfully.")
 
 
@@ -191,13 +238,23 @@ class MeView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
     def retrieve(self, request, *args, **kwargs):
-        return api_response(message="Profile retrieved.", data=self.get_serializer(request.user).data)
+        return api_response(
+            message="Profile retrieved.",
+            data=self.get_serializer(request.user).data,
+        )
 
     def update(self, request, *args, **kwargs):
-        serializer = self.get_serializer(request.user, data=request.data, partial=True)
+        serializer = self.get_serializer(
+            request.user,
+            data=request.data,
+            partial=True,
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return api_response(message="Profile updated.", data=serializer.data)
+        return api_response(
+            message="Profile updated.",
+            data=serializer.data,
+        )
 
 
 # --------------------------------------------------------------------- #
@@ -207,10 +264,17 @@ class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated, IsAccountActive]
 
     def put(self, request):
-        serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
+        serializer = ChangePasswordSerializer(
+            data=request.data,
+            context={"request": request},
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        log_event(user=request.user, action=AuditLog.Action.PASSWORD_CHANGE, request=request)
+        log_event(
+            user=request.user,
+            action=AuditLog.Action.PASSWORD_CHANGE,
+            request=request,
+        )
         return api_response(message="Password changed successfully.")
 
 

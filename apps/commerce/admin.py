@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AssetPrice, CartItem, License, Order, OrderItem, ShoppingCart
+from .models import AssetPrice, License, Order, OrderItem, ShoppingCart
 
 
 @admin.register(License)

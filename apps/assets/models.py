@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
 from core.models import BaseModel
+
 
 class Category(BaseModel):
     name = models.CharField(max_length=100, unique=True)
@@ -28,6 +30,7 @@ class Category(BaseModel):
             return f"{self.parent.name} → {self.name}"
         return self.name
 
+
 class Collection(BaseModel):
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=100, unique=True)
@@ -36,12 +39,14 @@ class Collection(BaseModel):
     def __str__(self):
         return self.name
 
+
 class Tag(BaseModel):
     name = models.CharField(max_length=50, unique=True)
     slug = models.SlugField(max_length=50, unique=True)
 
     def __str__(self):
         return self.name
+
 
 class DigitalAsset(BaseModel):
     class AssetType(models.TextChoices):
@@ -67,12 +72,37 @@ class DigitalAsset(BaseModel):
     title = models.CharField(max_length=255, db_index=True)
     description = models.TextField(blank=True)
     caption = models.TextField(blank=True)
-    asset_type = models.CharField(max_length=50, choices=AssetType.choices, default=AssetType.PHOTOGRAPH)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT, db_index=True)
-    visibility = models.CharField(max_length=20, choices=Visibility.choices, default=Visibility.PRIVATE)
-    
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="assets")
-    collection = models.ForeignKey(Collection, on_delete=models.SET_NULL, null=True, blank=True, related_name="assets")
+    asset_type = models.CharField(
+        max_length=50,
+        choices=AssetType.choices,
+        default=AssetType.PHOTOGRAPH,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+        db_index=True,
+    )
+    visibility = models.CharField(
+        max_length=20,
+        choices=Visibility.choices,
+        default=Visibility.PRIVATE,
+    )
+
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assets",
+    )
+    collection = models.ForeignKey(
+        Collection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assets",
+    )
     tags = models.ManyToManyField(Tag, related_name="assets", blank=True)
 
     photographer = models.CharField(max_length=255, blank=True)
@@ -91,7 +121,11 @@ class DigitalAsset(BaseModel):
 
 
 class AssetMetadata(BaseModel):
-    asset = models.OneToOneField(DigitalAsset, on_delete=models.CASCADE, related_name="metadata")
+    asset = models.OneToOneField(
+        DigitalAsset,
+        on_delete=models.CASCADE,
+        related_name="metadata",
+    )
     keywords = models.TextField(blank=True)
     location = models.CharField(max_length=255, blank=True)
     county = models.CharField(max_length=100, blank=True)
@@ -109,12 +143,18 @@ class AssetMetadata(BaseModel):
 
 
 class AssetVariant(BaseModel):
-    asset = models.ForeignKey(DigitalAsset, on_delete=models.CASCADE, related_name="variants")
-    variant_name = models.CharField(max_length=100) # e.g., 'Thumbnail', 'Watermarked Preview', 'High Resolution', 'Original File'
+    asset = models.ForeignKey(
+        DigitalAsset,
+        on_delete=models.CASCADE,
+        related_name="variants",
+    )
+    # e.g., 'Thumbnail', 'Watermarked Preview', 'High Resolution',
+    # 'Original File'
+    variant_name = models.CharField(max_length=100)
     storage_path = models.CharField(max_length=500)
     mime_type = models.CharField(max_length=100)
-    file_size = models.BigIntegerField() # in bytes
-    checksum = models.CharField(max_length=64, blank=True) # e.g., SHA256
+    file_size = models.BigIntegerField()  # in bytes
+    checksum = models.CharField(max_length=64, blank=True)  # e.g., SHA256
 
     def __str__(self):
         return f"{self.variant_name} - {self.asset.title}"

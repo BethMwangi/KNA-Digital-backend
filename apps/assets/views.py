@@ -3,28 +3,31 @@ Assets API views.
 
 Follows SDD §16.2 response envelope and RBAC from accounts.permissions.
 """
-from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.filters import SearchFilter, OrderingFilter
+
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.response import Response
 
 from apps.accounts.permissions import IsContentEditorOrAbove
 
-from .models import Category, Collection, Tag, DigitalAsset
+from .models import Category, Collection, DigitalAsset, Tag
 from .serializers import (
     CategorySerializer,
     CollectionSerializer,
-    TagSerializer,
-    DigitalAssetListSerializer,
-    DigitalAssetDetailSerializer,
     DigitalAssetCreateSerializer,
+    DigitalAssetDetailSerializer,
+    DigitalAssetListSerializer,
+    TagSerializer,
 )
 
 
 def api_response(*, message: str, data=None, success: bool = True, status_code=status.HTTP_200_OK):
     """Standard response envelope (SDD §16.2)."""
-    return Response({"success": success, "message": message, "data": data or {}}, status=status_code)
+    return Response(
+        {"success": success, "message": message, "data": data or {}}, status=status_code
+    )
 
 
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -148,11 +151,15 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
         asset = self.get_object()
         asset.status = DigitalAsset.Status.PUBLISHED
         asset.save(update_fields=["status", "updated_at"])
-        return api_response(message="Asset published.", data={"id": str(asset.id), "status": asset.status})
+        return api_response(
+            message="Asset published.", data={"id": str(asset.id), "status": asset.status}
+        )
 
     @action(detail=True, methods=["post"])
     def archive(self, request, pk=None):
         asset = self.get_object()
         asset.status = DigitalAsset.Status.ARCHIVED
         asset.save(update_fields=["status", "updated_at"])
-        return api_response(message="Asset archived.", data={"id": str(asset.id), "status": asset.status})
+        return api_response(
+            message="Asset archived.", data={"id": str(asset.id), "status": asset.status}
+        )

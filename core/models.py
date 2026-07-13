@@ -5,6 +5,7 @@ UUID primary keys, audit timestamps, soft deletes.
 Every business entity in the platform should inherit from BaseModel so the
 standard fields (id, created_at, updated_at, deleted_at) exist everywhere.
 """
+
 import uuid
 
 from django.db import models

@@ -3,6 +3,7 @@ Payments API views (SDD §16.13).
 
 Gateway integration is stubbed — plug in real adapters when ready.
 """
+
 import uuid
 
 from django.utils import timezone
@@ -22,7 +23,9 @@ from .serializers import (
 
 def api_response(*, message: str, data=None, success: bool = True, status_code=status.HTTP_200_OK):
     """Standard response envelope (SDD §16.2)."""
-    return Response({"success": success, "message": message, "data": data or {}}, status=status_code)
+    return Response(
+        {"success": success, "message": message, "data": data or {}}, status=status_code
+    )
 
 
 class PaymentInitiateView(generics.CreateAPIView):

@@ -1,4 +1,5 @@
 """Root URL configuration — all business APIs are versioned under /api/v1 (SDD §16.4)."""
+
 from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView

@@ -4,6 +4,7 @@ Downloads models — tracks purchased asset downloads (SDD §16.14).
 A Download record is created when an Order is paid. The user can then
 request a secure, time-limited signed URL to fetch the high-res file.
 """
+
 import hashlib
 import time
 
@@ -76,10 +77,7 @@ class Download(BaseModel):
         signature = hashlib.sha256(raw.encode()).hexdigest()[:32]
 
         # TODO: Replace with real Supabase/S3 presigned URL generation
-        return (
-            f"/api/v1/downloads/file/{variant.id}/"
-            f"?expires={expiry}&sig={signature}"
-        )
+        return f"/api/v1/downloads/file/{variant.id}/" f"?expires={expiry}&sig={signature}"
 
     def record_download(self):
         """Increment the download counter."""

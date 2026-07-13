@@ -6,6 +6,7 @@ Usage in any app (assets, orders, ...):
     class AssetAdminViewSet(viewsets.ModelViewSet):
         permission_classes = [IsAuthenticated, IsContentEditorOrAbove]
 """
+
 from rest_framework.permissions import BasePermission
 
 from .models import Role

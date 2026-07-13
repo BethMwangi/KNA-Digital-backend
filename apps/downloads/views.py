@@ -4,6 +4,7 @@ Downloads API views (SDD §16.14).
 Customers can list their purchased downloads and generate secure
 signed URLs to fetch the high-resolution files.
 """
+
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 
@@ -16,7 +17,9 @@ from .serializers import DownloadSerializer
 
 def api_response(*, message: str, data=None, success: bool = True, status_code=status.HTTP_200_OK):
     """Standard response envelope (SDD §16.2)."""
-    return Response({"success": success, "message": message, "data": data or {}}, status=status_code)
+    return Response(
+        {"success": success, "message": message, "data": data or {}}, status=status_code
+    )
 
 
 class DownloadListView(generics.ListAPIView):

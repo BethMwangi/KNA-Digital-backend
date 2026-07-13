@@ -7,7 +7,6 @@ Design decisions:
 - ShoppingCart is one-per-user, lazy-created on first add.
 - Order is immutable after placement; state machine tracks fulfilment.
 """
-import uuid
 
 from django.conf import settings
 from django.db import models

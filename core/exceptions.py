@@ -9,6 +9,7 @@ Global exception handler producing the SDD §16.19 error envelope:
       "timestamp": "2026-07-02T10:15:00Z"
     }
 """
+
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.views import exception_handler

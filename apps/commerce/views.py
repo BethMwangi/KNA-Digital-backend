@@ -3,11 +3,11 @@ Commerce API views — Cart, Checkout, Orders, Licenses (SDD §16.8–§16.12).
 
 All responses use the SDD §16.2 envelope.
 """
-from rest_framework import generics, mixins, permissions, status, viewsets
-from rest_framework.decorators import action
+
+from rest_framework import generics, permissions, status, viewsets
 from rest_framework.response import Response
 
-from apps.accounts.permissions import IsAccountActive, IsContentEditorOrAbove
+from apps.accounts.permissions import IsAccountActive
 
 from .models import AssetPrice, CartItem, License, Order, ShoppingCart
 from .serializers import (
@@ -22,7 +22,9 @@ from .serializers import (
 
 def api_response(*, message: str, data=None, success: bool = True, status_code=status.HTTP_200_OK):
     """Standard response envelope (SDD §16.2)."""
-    return Response({"success": success, "message": message, "data": data or {}}, status=status_code)
+    return Response(
+        {"success": success, "message": message, "data": data or {}}, status=status_code
+    )
 
 
 # ------------------------------------------------------------------ #
