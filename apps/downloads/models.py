@@ -5,10 +5,8 @@ A Download record is created when an Order is paid. The user can then
 request a secure, time-limited signed URL to fetch the high-res file.
 """
 
-import hashlib
-import time
-
 from django.conf import settings
+from django.core.files.storage import storages
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -67,17 +65,15 @@ class Download(BaseModel):
 
     def generate_signed_url(self, variant: AssetVariant, expires_in: int = 3600) -> str:
         """
-        Generate a time-limited signed URL for a file.
-
-        In production, this would call Supabase Storage or S3 to generate
-        a presigned URL. For now it returns a placeholder token-based URL.
+        Time-limited signed URL for the purchased file, via the
+        "private_media" storage alias — a real presigned Supabase/S3 URL in
+        production, a plain local-disk URL in dev (see core/storage.py vs
+        core/storage_s3.py — only the S3 backend supports `expire`).
         """
-        expiry = int(time.time()) + expires_in
-        raw = f"{variant.storage_path}:{expiry}:{settings.SECRET_KEY}"
-        signature = hashlib.sha256(raw.encode()).hexdigest()[:32]
-
-        # TODO: Replace with real Supabase/S3 presigned URL generation
-        return f"/api/v1/downloads/file/{variant.id}/" f"?expires={expiry}&sig={signature}"
+        storage = storages["private_media"]
+        if hasattr(storage, "querystring_expire"):
+            return storage.url(variant.storage_path, expire=expires_in)
+        return storage.url(variant.storage_path)
 
     def record_download(self):
         """Increment the download counter."""

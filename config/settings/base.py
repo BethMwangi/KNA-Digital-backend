@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.assets",
     "apps.ingestion",
+    "apps.commerce",
 ]
 
 MIDDLEWARE = [
@@ -115,7 +116,7 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
     ),
     "DEFAULT_THROTTLE_RATES": {"anon": "60/min", "user": "300/min"},
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_SCHEMA_CLASS": "core.schema.AppGroupedAutoSchema",
     "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",
 }
 
@@ -174,4 +175,20 @@ LOGGING = {
     },
     "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "verbose"}},
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", default="INFO")},
+}
+
+MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = "/media/"
+BACKEND_URL = env("BACKEND_URL", default="http://localhost:8000")
+
+# ------------------------------------------------------------------ #
+# Media storage — public (watermarked, world-readable) vs private
+# (purchasable originals, signed URLs only). Local disk in dev;
+# production.py swaps these two aliases for Supabase Storage.
+# ------------------------------------------------------------------ #
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    "public_media": {"BACKEND": "core.storage.LocalPublicMediaStorage"},
+    "private_media": {"BACKEND": "core.storage.LocalPrivateMediaStorage"},
 }

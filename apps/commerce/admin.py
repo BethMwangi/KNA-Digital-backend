@@ -1,17 +1,12 @@
 from django.contrib import admin
 
-from .models import AssetPrice, License, Order, OrderItem, ShoppingCart
+from .models import CartItem, License, Order, OrderItem, ShoppingCart
 
 
 @admin.register(License)
 class LicenseAdmin(admin.ModelAdmin):
     list_display = ["name", "slug", "allows_commercial", "allows_modification"]
     prepopulated_fields = {"slug": ("name",)}
-
-
-class AssetPriceInline(admin.TabularInline):
-    model = AssetPrice
-    extra = 0
 
 
 class OrderItemInline(admin.TabularInline):
@@ -29,13 +24,14 @@ class OrderAdmin(admin.ModelAdmin):
     inlines = [OrderItemInline]
 
 
-@admin.register(AssetPrice)
-class AssetPriceAdmin(admin.ModelAdmin):
-    list_display = ["asset", "license", "amount", "is_active"]
-    list_filter = ["is_active", "license"]
+class CartItemInline(admin.TabularInline):
+    model = CartItem
+    extra = 0
+    readonly_fields = ["asset", "license"]
 
 
 @admin.register(ShoppingCart)
 class ShoppingCartAdmin(admin.ModelAdmin):
     list_display = ["user", "item_count", "total"]
     readonly_fields = ["user"]
+    inlines = [CartItemInline]

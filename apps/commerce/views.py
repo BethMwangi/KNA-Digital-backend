@@ -9,10 +9,9 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import IsAccountActive
 
-from .models import AssetPrice, CartItem, License, Order, ShoppingCart
+from .models import CartItem, License, Order, ShoppingCart
 from .serializers import (
     AddToCartSerializer,
-    AssetPriceSerializer,
     CartDetailSerializer,
     CheckoutSerializer,
     LicenseSerializer,
@@ -46,25 +45,6 @@ class LicenseViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 # ------------------------------------------------------------------ #
-# Public: Asset Prices (by asset)
-# ------------------------------------------------------------------ #
-class AssetPriceViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = AssetPriceSerializer
-    permission_classes = [permissions.AllowAny]
-
-    def get_queryset(self):
-        queryset = AssetPrice.objects.filter(is_active=True).select_related("asset", "license")
-        asset_id = self.request.query_params.get("asset")
-        if asset_id:
-            queryset = queryset.filter(asset_id=asset_id)
-        return queryset
-
-    def list(self, request, *args, **kwargs):
-        response = super().list(request, *args, **kwargs)
-        return api_response(message="Prices retrieved.", data=response.data)
-
-
-# ------------------------------------------------------------------ #
 # Cart — requires authentication
 # ------------------------------------------------------------------ #
 class CartView(generics.GenericAPIView):
@@ -89,17 +69,18 @@ class CartView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
 
         cart = self._get_or_create_cart(request.user)
-        asset_price_id = serializer.validated_data["asset_price_id"]
+        asset_id = serializer.validated_data["asset_id"]
+        license_id = serializer.validated_data["license_id"]
 
-        # Prevent duplicates
-        if cart.items.filter(asset_price_id=asset_price_id).exists():
+        # Prevent duplicates (same asset + same declared usage already in cart)
+        if cart.items.filter(asset_id=asset_id, license_id=license_id).exists():
             return api_response(
                 success=False,
                 message="This item is already in your cart.",
                 status_code=status.HTTP_409_CONFLICT,
             )
 
-        CartItem.objects.create(cart=cart, asset_price_id=asset_price_id)
+        CartItem.objects.create(cart=cart, asset_id=asset_id, license_id=license_id)
         cart_serializer = CartDetailSerializer(cart)
         return api_response(
             message="Item added to cart.",

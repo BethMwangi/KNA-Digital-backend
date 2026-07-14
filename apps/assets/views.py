@@ -76,10 +76,15 @@ class TagViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class DigitalAssetViewSet(viewsets.ModelViewSet):
-    queryset = DigitalAsset.objects.filter(
-        status=DigitalAsset.Status.PUBLISHED,
-        visibility=DigitalAsset.Visibility.PUBLIC,
+    queryset = (
+        DigitalAsset.objects.filter(
+            status=DigitalAsset.Status.PUBLISHED,
+            visibility=DigitalAsset.Visibility.PUBLIC,
+        )
+        .select_related("category", "collection", "metadata")
+        .prefetch_related("tags", "variants")
     )
+    # prefetch related fields to avoid N+1 queries
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["category", "collection", "asset_type", "publication_date"]
     search_fields = ["title", "description", "caption", "metadata__keywords"]
@@ -102,7 +107,12 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_authenticated and (user.is_staff or getattr(user, "is_content_editor", False)):
-            return DigitalAsset.all_objects.all()
+            return (
+                DigitalAsset.objects.all()
+                .select_related("category", "collection", "metadata")
+                .prefetch_related("tags", "variants")
+            )
+        # note :objects not all_objects because we want to show only published and public assets to non-staff users
         return super().get_queryset()
 
     def list(self, request, *args, **kwargs):
@@ -149,11 +159,19 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def publish(self, request, pk=None):
         asset = self.get_object()
+        if not asset.variants.filter(variant_name__in=["thumbnail", "preview"]).exists():
+            return api_response(
+                success=False,
+                message="Cannot publish: no thumbnail/preview has been generated for this asset.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
         asset.status = DigitalAsset.Status.PUBLISHED
         asset.save(update_fields=["status", "updated_at"])
         return api_response(
             message="Asset published.", data={"id": str(asset.id), "status": asset.status}
         )
+
+    # guard the publish action to ensure that the asset has at least one variant with the name "thumbnail" or "preview" before allowing it to be published. If not, return a 409 Conflict response with an appropriate message.
 
     @action(detail=True, methods=["post"])
     def archive(self, request, pk=None):

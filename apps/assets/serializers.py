@@ -1,6 +1,18 @@
+from django.core.files.storage import storages
 from rest_framework import serializers
 
 from .models import AssetMetadata, AssetVariant, Category, Collection, DigitalAsset, Tag
+
+
+def public_variant_url(asset, variant_name: str) -> str:
+    """URL for a watermarked public variant; empty string if not generated yet.
+    Uses prefetched variants when available (no extra query per asset).
+    Goes through the "public_media" storage alias so this works unchanged
+    whether files live on local disk (dev) or Supabase Storage (prod)."""
+    for v in asset.variants.all():
+        if v.variant_name == variant_name:
+            return storages["public_media"].url(v.storage_path)
+    return ""
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -51,6 +63,14 @@ class DigitalAssetListSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     collection = CollectionSerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
+    thumbnail = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+
+    def get_thumbnail(self, obj):
+        return public_variant_url(obj, "thumbnail") or public_variant_url(obj, "preview")
+
+    def get_currency(self, obj):
+        return "KES"
 
     class Meta:
         model = DigitalAsset
@@ -65,6 +85,9 @@ class DigitalAssetListSerializer(serializers.ModelSerializer):
             "collection",
             "tags",
             "photographer",
+            "thumbnail",
+            "price",
+            "currency",
             "publication_date",
             "created_at",
         ]
@@ -76,6 +99,18 @@ class DigitalAssetDetailSerializer(serializers.ModelSerializer):
     tags = TagSerializer(many=True, read_only=True)
     metadata = AssetMetadataSerializer(read_only=True)
     variants = AssetVariantPublicSerializer(many=True, read_only=True)
+    thumbnail = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+
+    def get_thumbnail(self, obj):
+        return public_variant_url(obj, "thumbnail")
+
+    def get_image(self, obj):
+        return public_variant_url(obj, "preview") or public_variant_url(obj, "thumbnail")
+
+    def get_currency(self, obj):
+        return "KES"
 
     class Meta:
         model = DigitalAsset
@@ -99,6 +134,10 @@ class DigitalAssetDetailSerializer(serializers.ModelSerializer):
             "capture_date",
             "metadata",
             "variants",
+            "thumbnail",
+            "image",
+            "price",
+            "currency",
             "created_at",
             "updated_at",
         ]
