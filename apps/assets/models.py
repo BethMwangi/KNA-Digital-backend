@@ -112,9 +112,14 @@ class DigitalAsset(BaseModel):
     publication_date = models.DateField(null=True, blank=True, db_index=True)
     capture_date = models.DateField(null=True, blank=True)
 
+    # Flat price in KES — same price regardless of the license (usage purpose)
+    # the buyer selects at checkout. NULL until priced (not yet purchasable).
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
     class Meta:
         verbose_name = _("Digital Asset")
         verbose_name_plural = _("Digital Assets")
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.asset_number} - {self.title}"

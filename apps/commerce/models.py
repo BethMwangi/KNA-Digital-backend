@@ -1,9 +1,11 @@
 """
-Commerce models — Licences, Pricing, Cart, Orders (SDD §16.8–§16.12).
+Commerce models — Licences, Cart, Orders.
 
 Design decisions:
-- License defines usage rights (Editorial, Commercial, etc.).
-- AssetPrice links a DigitalAsset to a License with a price in KES.
+- License is a usage-purpose tag the buyer picks at checkout (Editorial,
+  Commercial, Educational, Government) — it does NOT affect price. Every
+  photo has exactly one flat price (DigitalAsset.price); License is only
+  ever recorded for rights-tracking, on CartItem/OrderItem.
 - ShoppingCart is one-per-user, lazy-created on first add.
 - Order is immutable after placement; state machine tracks fulfilment.
 """
@@ -20,7 +22,11 @@ from core.models import BaseModel
 # License & Pricing
 # ------------------------------------------------------------------ #
 class License(BaseModel):
-    """Usage rights tier — e.g. Editorial, Commercial, Extended."""
+    """
+    Usage purpose the buyer declares at checkout — e.g. Editorial,
+    Commercial, Educational, Government. Purely a rights/usage-tracking
+    tag: it never affects price (see DigitalAsset.price).
+    """
 
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=100, unique=True)
@@ -38,37 +44,6 @@ class License(BaseModel):
 
     def __str__(self):
         return self.name
-
-
-class AssetPrice(BaseModel):
-    """
-    Links an asset to a license with a price.
-    One asset can have multiple prices (one per license tier).
-    """
-
-    asset = models.ForeignKey(
-        DigitalAsset,
-        on_delete=models.CASCADE,
-        related_name="prices",
-    )
-    license = models.ForeignKey(
-        License,
-        on_delete=models.PROTECT,
-        related_name="prices",
-    )
-    amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        help_text=_("Price in KES."),
-    )
-    is_active = models.BooleanField(default=True)
-
-    class Meta:
-        db_table = "asset_prices"
-        unique_together = ["asset", "license"]
-
-    def __str__(self):
-        return f"{self.asset.title} — {self.license.name}: KES {self.amount}"
 
 
 # ------------------------------------------------------------------ #
@@ -106,24 +81,28 @@ class CartItem(BaseModel):
         on_delete=models.CASCADE,
         related_name="items",
     )
-    asset_price = models.ForeignKey(
-        AssetPrice,
+    asset = models.ForeignKey(
+        DigitalAsset,
         on_delete=models.CASCADE,
         related_name="cart_items",
+    )
+    license = models.ForeignKey(
+        License,
+        on_delete=models.PROTECT,
+        related_name="cart_items",
+        help_text=_("Intended usage for this purchase — does not affect price."),
     )
 
     class Meta:
         db_table = "cart_items"
-        unique_together = ["cart", "asset_price"]
+        unique_together = ["cart", "asset", "license"]
 
     def __str__(self):
-        asset_title = self.asset_price.asset.title
-        license_name = self.asset_price.license.name
-        return f"{asset_title} ({license_name})"
+        return f"{self.asset.title} ({self.license.name})"
 
     @property
     def subtotal(self):
-        return self.asset_price.amount
+        return self.asset.price or 0
 
 
 # ------------------------------------------------------------------ #
