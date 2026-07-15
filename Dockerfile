@@ -8,7 +8,8 @@ RUN pip install --no-cache-dir -r requirements/production.txt
 
 COPY . .
 
-RUN python manage.py collectstatic --noinput --settings=config.settings.production || true
-
 EXPOSE 8000
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+# collectstatic runs at container start, not build time — production settings
+# require the Supabase S3 env vars just to load, and those are only ever
+# available at runtime, never during `docker build`.
+CMD ["sh", "-c", "python manage.py collectstatic --noinput --settings=config.settings.production && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"]
