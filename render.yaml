@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: kna-digital-backend
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.0
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false # You will provide this in the Render dashboard (e.g. your Supabase URL)
+      - key: ALLOWED_HOSTS
+        value: "*" # Or restrict to your specific Render domain
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false # Set this in the dashboard to your frontend URL
