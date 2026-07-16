@@ -141,7 +141,7 @@ SPECTACULAR_SETTINGS = {
 # CORS — Next.js frontend
 # ------------------------------------------------------------------ #
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[FRONTEND_URL])
-
+CORS_ALLOWED_ORIGIN_REGEXES = [r"^https://.*\.vercel\.app$"]
 # ------------------------------------------------------------------ #
 # Email (SDD §21) — console in dev, SMTP/provider in production
 # ------------------------------------------------------------------ #

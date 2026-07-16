@@ -29,3 +29,6 @@ build/
 
 # Personal machine-specific compose overrides
 docker-compose.override.yml
+
+# Raw source TIFFs — hundreds of MB, never belongs in git
+apps/data/tiffs/

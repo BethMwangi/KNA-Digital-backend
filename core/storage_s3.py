@@ -18,13 +18,26 @@ from storages.backends.s3boto3 import S3Boto3Storage
 
 
 class SupabasePublicMediaStorage(S3Boto3Storage):
+    """
+    Uploads go through the S3-compatible protocol (PutObject) same as any
+    S3Boto3Storage. Reads do NOT: Supabase's S3 endpoint (/storage/v1/s3/…)
+    always demands a signed request, public bucket or not — "public" only
+    applies to Supabase's own native REST path (/storage/v1/object/public/…),
+    which serves unsigned reads. So .url() is overridden to build that path
+    instead of the (always-signed) S3-style URL the base class would give.
+    """
+
     default_acl = "public-read"
-    querystring_auth = False  # plain public URLs, no signed query params
+    querystring_auth = False
     file_overwrite = True
 
     def __init__(self, **kwargs):
         kwargs.setdefault("bucket_name", settings.SUPABASE_PUBLIC_BUCKET)
         super().__init__(**kwargs)
+
+    def url(self, name, parameters=None, expire=None, http_method=None):
+        base = settings.AWS_S3_ENDPOINT_URL.replace("/storage/v1/s3", "/storage/v1/object/public")
+        return f"{base}/{self.bucket_name}/{name}"
 
 
 class SupabasePrivateMediaStorage(S3Boto3Storage):
