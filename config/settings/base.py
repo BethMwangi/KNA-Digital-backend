@@ -4,6 +4,7 @@ Environment-specific values come from env vars (12-factor).
 """
 
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import environ
@@ -192,3 +193,50 @@ STORAGES = {
     "public_media": {"BACKEND": "core.storage.LocalPublicMediaStorage"},
     "private_media": {"BACKEND": "core.storage.LocalPrivateMediaStorage"},
 }
+
+# ------------------------------------------------------------------ #
+# Ingestion — live feed (apps/ingestion). Endpoint details are secrets:
+# they live only in the environment, never in the repo.
+# ------------------------------------------------------------------ #
+URITHI_BASE_URL = env("URITHI_BASE_URL", default="")
+URITHI_LIST_PATH = env("URITHI_LIST_PATH", default="")
+URITHI_ACK_PATH = env("URITHI_ACK_PATH", default="")
+# Copy source thumbnails into our own bucket (hybrid mirroring) so the
+# storefront never depends on the source server's uptime. Turn off only
+# as a launch-fast fallback — variants then keep hotlinking source URLs.
+MIRROR_THUMBNAILS = env.bool("MIRROR_THUMBNAILS", default=True)
+# Flat KES price applied to synced assets that have no price yet.
+ASSET_DEFAULT_PRICE = Decimal(env("ASSET_DEFAULT_PRICE", default="1500.00"))
+
+# ------------------------------------------------------------------ #
+# Celery — RabbitMQ broker. ALWAYS_EAGER=True executes tasks inline;
+# keep it True wherever no worker process runs (single-dyno deploys),
+# set it False where one does (docker compose `worker` service).
+# ------------------------------------------------------------------ #
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="amqp://guest:guest@localhost:5672//")
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=True)
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_RESULT_BACKEND = None  # fire-and-forget tasks; no result store needed
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_TASK_ACKS_LATE = True  # re-deliver if a worker dies mid-task
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+# ------------------------------------------------------------------ #
+# Cache — Redis when REDIS_URL is set, in-process fallback otherwise.
+# Used for public read endpoints (assets/categories/collections change
+# rarely, so short TTLs cut most DB round-trips).
+# ------------------------------------------------------------------ #
+REDIS_URL = env("REDIS_URL", default="")
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "KEY_PREFIX": "kna",
+        }
+    }
+else:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+API_CACHE_TTL = env.int("API_CACHE_TTL", default=900)  # seconds; public reads

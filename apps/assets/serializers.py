@@ -11,6 +11,8 @@ def public_variant_url(asset, variant_name: str) -> str:
     whether files live on local disk (dev) or Supabase Storage (prod)."""
     for v in asset.variants.all():
         if v.variant_name == variant_name:
+            if v.storage_path.startswith(("http://", "https://")):
+                return v.storage_path  # just synced, not yet mirrored (hotlink)
             return storages["public_media"].url(v.storage_path)
     return ""
 

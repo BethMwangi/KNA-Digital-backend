@@ -8,3 +8,6 @@ drf-spectacular>=0.28
 argon2-cffi>=23.1
 psycopg[binary]>=3.2
 Pillow>=11.0
+requests>=2.32
+celery>=5.4
+redis>=5.0
