@@ -1,5 +1,5 @@
 """
-Ingestion models — ADDITIVE ONLY.  existing assets tables are untouched;
+Ingestion models — ADDITIVE ONLY. Your existing assets tables are untouched;
 these three tables sit alongside them and hold everything the sync needs.
 
 AssetSyncRecord  — identity bridge: legacy image_id ↔ our DigitalAsset,
