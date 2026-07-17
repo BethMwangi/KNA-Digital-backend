@@ -4,6 +4,7 @@ Commerce API views — Cart, Checkout, Orders, Licenses (SDD §16.8–§16.12).
 All responses use the SDD §16.2 envelope.
 """
 
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.response import Response
 
@@ -47,11 +48,26 @@ class LicenseViewSet(viewsets.ReadOnlyModelViewSet):
 # ------------------------------------------------------------------ #
 # Cart — requires authentication
 # ------------------------------------------------------------------ #
+@extend_schema_view(
+    get=extend_schema(
+        summary="View cart",
+        description="Retrieve the current user's shopping cart with all items, subtotals and total.",
+        responses=CartDetailSerializer,
+    ),
+    post=extend_schema(
+        summary="Add item to cart",
+        description="Add a digital asset to the cart with a declared license (usage purpose).",
+        request=AddToCartSerializer,
+        responses=CartDetailSerializer,
+    ),
+)
 class CartView(generics.GenericAPIView):
     """
     GET  → view cart
     POST → add item to cart
     """
+
+    serializer_class = AddToCartSerializer
 
     permission_classes = [permissions.IsAuthenticated, IsAccountActive]
 
@@ -89,8 +105,15 @@ class CartView(generics.GenericAPIView):
         )
 
 
+@extend_schema(
+    summary="Remove cart item",
+    description="Remove a single item from the cart by its UUID.",
+    responses=CartDetailSerializer,
+)
 class CartItemDeleteView(generics.DestroyAPIView):
     """DELETE /api/v1/cart/items/{id}/ — remove a single item."""
+
+    serializer_class = CartDetailSerializer
 
     permission_classes = [permissions.IsAuthenticated, IsAccountActive]
 
@@ -105,8 +128,14 @@ class CartItemDeleteView(generics.DestroyAPIView):
         return api_response(message="Item removed from cart.", data=serializer.data)
 
 
+@extend_schema(
+    summary="Clear cart",
+    description="Remove all items from the cart.",
+)
 class CartClearView(generics.GenericAPIView):
     """POST /api/v1/cart/clear/ — empty the cart."""
+
+    serializer_class = CartDetailSerializer
 
     permission_classes = [permissions.IsAuthenticated, IsAccountActive]
 
@@ -148,6 +177,9 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        # Guard for drf-spectacular anonymous schema introspection
+        if not user or not user.is_authenticated:
+            return Order.objects.none()
         if user.is_admin or user.is_super_admin:
             return Order.objects.all().select_related("user")
         return Order.objects.filter(user=user)

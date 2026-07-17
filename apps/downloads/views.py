@@ -5,7 +5,8 @@ Customers can list their purchased downloads and generate secure
 signed URLs to fetch the high-resolution files.
 """
 
-from rest_framework import generics, permissions, status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import generics, permissions, serializers, status
 from rest_framework.response import Response
 
 from apps.accounts.permissions import IsAccountActive
@@ -29,9 +30,10 @@ class DownloadListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated, IsAccountActive]
 
     def get_queryset(self):
-        return Download.objects.filter(user=self.request.user).select_related(
-            "asset", "license", "order"
-        )
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return Download.objects.none()
+        return Download.objects.filter(user=user).select_related("asset", "license", "order")
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)
@@ -47,6 +49,22 @@ class DownloadLinkView(generics.GenericAPIView):
 
     permission_classes = [permissions.IsAuthenticated, IsAccountActive]
 
+    @extend_schema(
+        summary="Generate download link",
+        description="Returns a time-limited signed URL to download the purchased high-resolution asset.",
+        responses={
+            200: inline_serializer(
+                name="DownloadLinkResponse",
+                fields={
+                    "download_url": serializers.URLField(),
+                    "file_name": serializers.CharField(),
+                    "mime_type": serializers.CharField(),
+                    "file_size": serializers.IntegerField(),
+                    "downloads_remaining": serializers.IntegerField(),
+                },
+            )
+        },
+    )
     def get(self, request, pk):
         try:
             download = Download.objects.get(id=pk, user=request.user)

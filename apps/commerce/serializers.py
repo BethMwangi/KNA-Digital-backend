@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from apps.assets.models import DigitalAsset
 from apps.assets.serializers import public_variant_url
+from apps.downloads.models import Download
 
 from .models import (
     CartItem,
@@ -170,6 +171,19 @@ class CheckoutSerializer(serializers.Serializer):
                 for item in cart_items
             ]
             OrderItem.objects.bulk_create(order_items)
+
+            # Create download records so the user can download the assets
+            downloads = [
+                Download(
+                    user=user,
+                    order=order,
+                    asset=item.asset,
+                    license=item.license,
+                    max_downloads=5,
+                )
+                for item in cart_items
+            ]
+            Download.objects.bulk_create(downloads)
 
             # Clear the cart after checkout
             cart_items.delete()
