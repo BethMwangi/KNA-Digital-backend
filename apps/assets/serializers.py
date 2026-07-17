@@ -106,10 +106,16 @@ class DigitalAssetListSerializer(serializers.ModelSerializer):
     collection = CollectionSerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     thumbnail = serializers.SerializerMethodField()
+    has_back = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
 
     def get_thumbnail(self, obj):
         return public_variant_url(obj, "thumbnail") or public_variant_url(obj, "preview")
+
+    def get_has_back(self, obj) -> bool:
+        """True when the physical print's back (stamps, captions) was
+        scanned too — the buyer gets front and back content."""
+        return any(v.variant_name.endswith("_back") for v in obj.variants.all())
 
     def get_currency(self, obj):
         return "KES"
@@ -128,6 +134,7 @@ class DigitalAssetListSerializer(serializers.ModelSerializer):
             "tags",
             "photographer",
             "thumbnail",
+            "has_back",
             "price",
             "currency",
             "publication_date",
@@ -143,6 +150,8 @@ class DigitalAssetDetailSerializer(serializers.ModelSerializer):
     variants = AssetVariantPublicSerializer(many=True, read_only=True)
     thumbnail = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    image_back = serializers.SerializerMethodField()
+    has_back = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
 
     def get_thumbnail(self, obj):
@@ -150,6 +159,14 @@ class DigitalAssetDetailSerializer(serializers.ModelSerializer):
 
     def get_image(self, obj):
         return public_variant_url(obj, "preview") or public_variant_url(obj, "thumbnail")
+
+    def get_image_back(self, obj):
+        """Back of the physical print (stamps, handwritten captions);
+        empty string for front-only prints."""
+        return public_variant_url(obj, "preview_back") or public_variant_url(obj, "thumbnail_back")
+
+    def get_has_back(self, obj) -> bool:
+        return any(v.variant_name.endswith("_back") for v in obj.variants.all())
 
     def get_currency(self, obj):
         return "KES"
@@ -178,6 +195,8 @@ class DigitalAssetDetailSerializer(serializers.ModelSerializer):
             "variants",
             "thumbnail",
             "image",
+            "image_back",
+            "has_back",
             "price",
             "currency",
             "created_at",
