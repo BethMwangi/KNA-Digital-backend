@@ -15,6 +15,7 @@ sync_images(): idempotent upsert keyed on external_id.
 """
 
 import logging
+import re
 import uuid
 
 from django.conf import settings
@@ -102,6 +103,23 @@ def sync_categories(records: list[dict]) -> SyncRun:
 # --------------------------------------------------------------------- #
 # Images
 # --------------------------------------------------------------------- #
+ASSET_NUMBER_PATTERN = r"^KNA-\d{6}$"
+
+
+def next_asset_number() -> str:
+    """Next e-commerce style SKU: KNA-000001, KNA-000002, ...
+    Zero-padded so string ordering IS numeric ordering. Sync runs are
+    single-threaded, so a max-scan is race-safe enough here."""
+    last = (
+        DigitalAsset.all_objects.filter(asset_number__regex=ASSET_NUMBER_PATTERN)
+        .order_by("-asset_number")
+        .values_list("asset_number", flat=True)
+        .first()
+    )
+    nxt = int(last.rsplit("-", 1)[1]) + 1 if last else 1
+    return f"KNA-{nxt:06d}"
+
+
 def _resolve(item_type: str, code) -> LegacyCodeMap | None:
     """Codes arrive as ints (JSON dumps) or strings ('3', live feed)."""
     if code in (None, "", 0):
@@ -185,6 +203,10 @@ def _map_metadata(asset: DigitalAsset, rec: dict) -> None:
 
 def _map_tags(asset: DigitalAsset, rec: dict) -> None:
     names = nz.parse_tags(rec.get("image_keywords"))
+    # Date tags — year and decade ("1979", "1970s") make era search work.
+    pub = nz.parse_date(rec.get("image_date_created"))
+    if pub:
+        names += [str(pub.year), f"{pub.year // 10 * 10}s"]
     tags = []
     for name in names:
         tag, _ = Tag.objects.get_or_create(
@@ -194,23 +216,21 @@ def _map_tags(asset: DigitalAsset, rec: dict) -> None:
     asset.tags.set(tags)
 
 
-THUMB_SIZE_RE = None  # set lazily below to avoid top-level re dependency confusion
-
-
 def _parse_thumbnail_entries(rec: dict) -> dict:
     """
     Normalise both feed shapes into {variant_name: url}:
 
-    Live Urithi feed — list of URL strings, size encoded in the filename:
-        ".../13ea66...-600_1.jpeg"   -> 600px  -> 'thumbnail' (grid)
-        ".../13ea66...-1200_1.jpeg"  -> 1200px -> 'preview'   (detail page)
-    (The _1/_2 suffix is front/back of the physical print; we take the
-    first of each size — the _2 back-of-print scans stay in the payload.)
+    Live Urithi feed — URL strings encode size AND side in the filename:
+        ".../13ea66...-600_1.jpeg"   -> 600px  front -> 'thumbnail' (grid)
+        ".../13ea66...-1200_1.jpeg"  -> 1200px front -> 'preview'  (detail)
+        ".../13ea66...-600_2.jpeg"   -> 600px  back  -> 'thumbnail_back'
+        ".../13ea66...-1200_2.jpeg"  -> 1200px back  -> 'preview_back'
+    Side 2 is the BACK of the physical print (stamps, handwritten
+    captions) — exposed so buyers see they're getting front AND back.
+    A 2-entry list is a front-only print; 4 entries means both sides.
 
     Dict shape (earlier spec) — [{"size": "small", "url": ...}] still works.
     """
-    import re as _re
-
     entries = rec.get("thumbnails") or rec.get("image_thumbnails") or []
     size_to_variant = {"small": "thumbnail", "medium": "preview", "large": "preview"}
     out: dict[str, str] = {}
@@ -220,9 +240,12 @@ def _parse_thumbnail_entries(rec: dict) -> dict:
             variant = size_to_variant.get(str(item.get("size", "")).lower(), "thumbnail")
         else:
             url = str(item).strip()
-            m = _re.search(r"-(\d{3,4})_(\d+)\.(?:jpe?g|png)$", url, _re.IGNORECASE)
+            m = re.search(r"-(\d{3,4})_(\d+)\.(?:jpe?g|png)$", url, re.IGNORECASE)
             px = int(m.group(1)) if m else 0
+            side = int(m.group(2)) if m else 1
             variant = "thumbnail" if 0 < px <= 800 else "preview"
+            if side >= 2:
+                variant += "_back"
         if url and variant not in out:
             out[variant] = url
     return out
@@ -275,11 +298,11 @@ def _sync_one(rec: dict) -> tuple[str, AssetSyncRecord]:
     sync = AssetSyncRecord.objects.select_related("asset").filter(external_id=external_id).first()
 
     if sync is None:
-        # asset_number is OURS, derived deterministically from the legacy
-        # UUID — refno is NOT unique and sometimes absent, so it can never
-        # be a key. It's kept on the sync record purely as provenance
-        # metadata (the physical print reference), searchable by archivists.
-        asset = DigitalAsset(asset_number=f"KNA-{external_id.hex[:12].upper()}")
+        # asset_number is OUR e-commerce SKU (KNA-000001...), independent
+        # of the source's image_id — identity/dedupe lives on the sync
+        # record's external_id, and the physical print refno is kept there
+        # too as provenance metadata, searchable by archivists.
+        asset = DigitalAsset(asset_number=next_asset_number())
         _map_fields(asset, rec)
         asset.save()
         _map_metadata(asset, rec)

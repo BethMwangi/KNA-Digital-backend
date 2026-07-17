@@ -25,7 +25,13 @@ from django.db.models import ProtectedError
 
 from apps.assets.models import DigitalAsset
 from apps.ingestion.models import AssetSyncRecord
-from apps.ingestion.services import _map_fields, _map_metadata, _map_tags, _map_variants
+from apps.ingestion.services import (
+    _map_fields,
+    _map_metadata,
+    _map_tags,
+    _map_variants,
+    next_asset_number,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +46,13 @@ class Command(BaseCommand):
             "--keep-unsynced",
             action="store_true",
             help="Skip deleting assets that lack a sync record (TIFF/test imports).",
+        )
+        parser.add_argument(
+            "--recreate",
+            action="store_true",
+            help="Full clean reload: build each feed asset as a BRAND-NEW row "
+            "(fresh id + fresh sequential KNA-###### number), relink the sync "
+            "record, delete the old row. Old asset ids/URLs stop existing.",
         )
 
     def handle(self, *args, **options):
@@ -85,12 +98,28 @@ class Command(BaseCommand):
                 continue
             try:
                 with transaction.atomic():
-                    asset, rec = sync.asset, sync.payload
-                    _map_fields(asset, rec)
-                    asset.save()
-                    _map_metadata(asset, rec)
-                    _map_tags(asset, rec)
-                    _map_variants(asset, rec)
+                    rec = sync.payload
+                    if options["recreate"]:
+                        # New row first, relink sync, THEN delete the old
+                        # row — deleting first would cascade the sync
+                        # record and lose the payload forever.
+                        old = sync.asset
+                        asset = DigitalAsset(asset_number=next_asset_number())
+                        _map_fields(asset, rec)
+                        asset.save()
+                        _map_metadata(asset, rec)
+                        _map_tags(asset, rec)
+                        _map_variants(asset, rec)
+                        sync.asset = asset
+                        sync.save(update_fields=["asset", "last_synced_at"])
+                        old.delete(hard=True)
+                    else:
+                        asset = sync.asset
+                        _map_fields(asset, rec)
+                        asset.save()
+                        _map_metadata(asset, rec)
+                        _map_tags(asset, rec)
+                        _map_variants(asset, rec)
                 remapped += 1
                 logger.info("REMAPPED %s -> %.60s", asset.asset_number, asset.title)
             except Exception as exc:  # noqa: BLE001
