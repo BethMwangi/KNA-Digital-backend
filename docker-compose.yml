@@ -23,7 +23,8 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    # No host port: backend/worker reach it on the compose network as
+    # redis://redis:6379. (A brew redis on the host owns 6379 anyway.)
     volumes: [redisdata:/data]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

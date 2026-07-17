@@ -24,14 +24,16 @@ class DigitalAssetAdmin(admin.ModelAdmin):
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ["name", "slug"]
+    list_display = ["name", "slug", "cover_asset"]
     prepopulated_fields = {"slug": ("name",)}
+    raw_id_fields = ["cover_asset"]  # curate the card banner per category
 
 
 @admin.register(Collection)
 class CollectionAdmin(admin.ModelAdmin):
-    list_display = ["name", "slug"]
+    list_display = ["name", "slug", "cover_asset"]
     prepopulated_fields = {"slug": ("name",)}
+    raw_id_fields = ["cover_asset"]  # curate the card banner per collection
 
 
 @admin.register(Tag)

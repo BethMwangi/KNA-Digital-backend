@@ -21,6 +21,17 @@ class Category(BaseModel):
         related_name="subcategories",
         help_text=_("Parent category. NULL for top-level main categories."),
     )
+    cover_asset = models.ForeignKey(
+        "DigitalAsset",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text=_(
+            "Curated banner image for this category's card. "
+            "Leave empty to auto-use the newest published asset."
+        ),
+    )
 
     class Meta:
         verbose_name_plural = "Categories"
@@ -35,6 +46,17 @@ class Collection(BaseModel):
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=100, unique=True)
     description = models.TextField(blank=True)
+    cover_asset = models.ForeignKey(
+        "DigitalAsset",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text=_(
+            "Curated banner image for this collection's card. "
+            "Leave empty to auto-use the newest published asset."
+        ),
+    )
 
     def __str__(self):
         return self.name
