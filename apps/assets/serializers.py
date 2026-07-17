@@ -17,16 +17,56 @@ def public_variant_url(asset, variant_name: str) -> str:
     return ""
 
 
-class CategorySerializer(serializers.ModelSerializer):
+def _cover_url(obj) -> str:
+    """Banner image for a Collection/Category card: the curated cover_asset
+    if an editor picked one, else the newest published asset. Uses the
+    1200px 'preview' variant (bigger than the grid thumbnail)."""
+    asset = obj.cover_asset
+    if asset is None:
+        asset = (
+            obj.assets.filter(
+                status=DigitalAsset.Status.PUBLISHED,
+                visibility=DigitalAsset.Visibility.PUBLIC,
+            )
+            .prefetch_related("variants")
+            .order_by("-created_at")
+            .first()
+        )
+    if asset is None:
+        return ""
+    return public_variant_url(asset, "preview") or public_variant_url(asset, "thumbnail")
+
+
+class _CardCountMixin(serializers.ModelSerializer):
+    """count = published+public assets. Reads the viewset's annotation when
+    present (no extra query); falls back to a COUNT for other callers."""
+
+    count = serializers.SerializerMethodField()
+    cover = serializers.SerializerMethodField()
+
+    def get_count(self, obj) -> int:
+        annotated = getattr(obj, "asset_count", None)
+        if annotated is not None:
+            return annotated
+        return obj.assets.filter(
+            status=DigitalAsset.Status.PUBLISHED,
+            visibility=DigitalAsset.Visibility.PUBLIC,
+        ).count()
+
+    def get_cover(self, obj) -> str:
+        return _cover_url(obj)
+
+
+class CategorySerializer(_CardCountMixin):
     class Meta:
         model = Category
-        fields = ["id", "name", "slug", "description", "created_at", "updated_at"]
+        fields = ["id", "name", "slug", "description", "count", "cover", "created_at", "updated_at"]
 
 
-class CollectionSerializer(serializers.ModelSerializer):
+class CollectionSerializer(_CardCountMixin):
     class Meta:
         model = Collection
-        fields = ["id", "name", "slug", "description", "created_at", "updated_at"]
+        fields = ["id", "name", "slug", "description", "count", "cover", "created_at", "updated_at"]
 
 
 class TagSerializer(serializers.ModelSerializer):

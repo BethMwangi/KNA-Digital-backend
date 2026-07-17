@@ -5,6 +5,7 @@ Follows SDD §16.2 response envelope and RBAC from accounts.permissions.
 """
 
 from django.conf import settings
+from django.db.models import Count, Q
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_headers
@@ -40,9 +41,19 @@ def api_response(*, message: str, data=None, success: bool = True, status_code=s
 cache_public = method_decorator(cache_page(settings.API_CACHE_TTL))
 vary_auth = method_decorator(vary_on_headers("Authorization"))
 
+# Card data for the storefront: count only what visitors can actually see.
+_PUBLISHED_COUNT = Count(
+    "assets",
+    filter=Q(
+        assets__status=DigitalAsset.Status.PUBLISHED,
+        assets__visibility=DigitalAsset.Visibility.PUBLIC,
+        assets__deleted_at__isnull=True,
+    ),
+)
+
 
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Category.objects.all()
+    queryset = Category.objects.annotate(asset_count=_PUBLISHED_COUNT).select_related("cover_asset")
     serializer_class = CategorySerializer
     permission_classes = [permissions.AllowAny]
 
@@ -59,7 +70,9 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class CollectionViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Collection.objects.all()
+    queryset = Collection.objects.annotate(asset_count=_PUBLISHED_COUNT).select_related(
+        "cover_asset"
+    )
     serializer_class = CollectionSerializer
     permission_classes = [permissions.AllowAny]
 
