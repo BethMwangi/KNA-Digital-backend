@@ -51,8 +51,10 @@ class CommerceAndDownloadsFlowTests(APITestCase):
         """
         Tests the entire flow:
         - Add item to cart
-        - Checkout (creates order, empties cart)
-        - Checkout auto-creates Download record
+        - Checkout (creates a PENDING order, empties cart) — no
+          entitlement yet, an unpaid order buys nothing
+        - Simulate a successful mock payment (apps.payments) — THIS is
+          what grants the Download record, matching a real gateway
         - User can request download link
         """
 
@@ -72,14 +74,33 @@ class CommerceAndDownloadsFlowTests(APITestCase):
         checkout_url = reverse("checkout")
         response = self.client.post(checkout_url, {"notes": "Test checkout"})
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        order_id = response.data["data"]["id"]
 
-        # Ensure order is created
+        # Ensure order is created, PENDING (not yet paid)
         self.assertEqual(Order.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(Order.objects.get(id=order_id).status, Order.Status.PENDING)
 
         # Ensure cart is emptied
         self.assertEqual(cart.items.count(), 0)
 
-        # --- STEP 3: VERIFY DOWNLOAD CREATED ---
+        # An unpaid order grants nothing yet.
+        self.assertEqual(Download.objects.filter(user=self.user).count(), 0)
+
+        # --- STEP 3: PAY (mock gateway simulation) ---
+        response = self.client.post(
+            reverse("payment-initiate"), {"order_id": order_id, "provider": "mock"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payment_id = response.data["data"]["id"]
+
+        response = self.client.post(
+            reverse("payment-simulate", kwargs={"pk": payment_id}), {"outcome": "success"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["data"]["status"], "completed")
+
+        # --- STEP 4: VERIFY PAYMENT GRANTED THE DOWNLOAD ---
+        self.assertEqual(Order.objects.get(id=order_id).status, Order.Status.PAID)
         downloads = Download.objects.filter(user=self.user)
         self.assertEqual(downloads.count(), 1)
         download = downloads.first()
@@ -88,7 +109,7 @@ class CommerceAndDownloadsFlowTests(APITestCase):
         self.assertEqual(download.download_count, 0)
         self.assertEqual(download.max_downloads, 5)
 
-        # --- STEP 4: GET DOWNLOAD LINK ---
+        # --- STEP 5: GET DOWNLOAD LINK ---
         # Get the list of downloads
         list_url = reverse("download-list")
         response = self.client.get(list_url)

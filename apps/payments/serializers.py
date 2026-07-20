@@ -4,11 +4,16 @@ from .models import Payment
 
 
 class PaymentSerializer(serializers.ModelSerializer):
+    order_number = serializers.CharField(source="order.order_number", read_only=True)
+    order_status = serializers.CharField(source="order.status", read_only=True)
+
     class Meta:
         model = Payment
         fields = [
             "id",
             "order",
+            "order_number",
+            "order_status",
             "provider",
             "status",
             "amount",
@@ -54,3 +59,14 @@ class PaymentCallbackSerializer(serializers.Serializer):
         choices=["completed", "failed"],
     )
     provider_response = serializers.JSONField(required=False, default=dict)
+
+
+class SimulatePaymentSerializer(serializers.Serializer):
+    """
+    Drives the MOCK gateway: stands in for the customer completing (or
+    abandoning) checkout on a real provider's hosted payment page.
+    Not valid for any other provider — those complete via /callback/
+    once a real gateway integration is wired in.
+    """
+
+    outcome = serializers.ChoiceField(choices=["success", "failure"], default="success")
