@@ -95,6 +95,7 @@ class AssetMetadataSerializer(serializers.ModelSerializer):
             "historical_period",
             "headline",
             "language",
+            "date_digitized",
         ]
 
 

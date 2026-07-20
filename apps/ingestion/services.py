@@ -197,6 +197,9 @@ def _map_metadata(asset: DigitalAsset, rec: dict) -> None:
             "headline": nz.sentence_case(rec.get("image_headline"))[:255],
             "historical_period": "",
             "language": "en",
+            # Digitisation date — the only date the source has for many
+            # records; frontend shows it when publication_date is null.
+            "date_digitized": nz.parse_date(rec.get("date_image_injested")),
         },
     )
 

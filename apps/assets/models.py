@@ -161,6 +161,15 @@ class AssetMetadata(BaseModel):
     historical_period = models.CharField(max_length=100, blank=True)
     headline = models.CharField(max_length=255, blank=True)
     language = models.CharField(max_length=50, blank=True, default="en")
+    date_digitized = models.DateField(
+        null=True,
+        blank=True,
+        help_text=_(
+            "When KNA digitised the physical print (source's "
+            "date_image_injested). Shown when the original publication "
+            "date is unknown."
+        ),
+    )
 
     # New fields for JSON ingestion
     legacy_image_id = models.UUIDField(null=True, blank=True)
