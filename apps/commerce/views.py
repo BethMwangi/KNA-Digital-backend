@@ -5,6 +5,7 @@ All responses use the SDD §16.2 envelope.
 """
 
 import logging
+
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, permissions, status, viewsets
@@ -241,9 +242,13 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         # Guard for drf-spectacular anonymous schema introspection
         if not user or not user.is_authenticated:
             return Order.objects.none()
+        # items__asset__variants: nested OrderItemSerializer resolves each
+        # asset's thumbnail via public_variant_url(), which iterates
+        # asset.variants.all() — prefetch or every order item N+1s it.
+        base = Order.objects.prefetch_related("items__asset__variants", "items__license")
         if user.is_admin or user.is_super_admin:
-            return Order.objects.all().select_related("user")
-        return Order.objects.filter(user=user)
+            return base.select_related("user")
+        return base.filter(user=user)
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)

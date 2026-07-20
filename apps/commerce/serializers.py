@@ -115,6 +115,12 @@ class CartSyncSerializer(serializers.Serializer):
 # Orders
 # ------------------------------------------------------------------ #
 class OrderItemSerializer(serializers.ModelSerializer):
+    # Nested, not bare FK ids — the order history/receipt view needs the
+    # asset's thumbnail/title and the license's name to render a row
+    # without a second round-trip per item.
+    asset = CartAssetSerializer(read_only=True)
+    license = LicenseSerializer(read_only=True)
+
     class Meta:
         model = OrderItem
         fields = [
@@ -128,6 +134,10 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
+    item_count = serializers.SerializerMethodField()
+
+    def get_item_count(self, obj) -> int:
+        return len(obj.items.all())  # len(), not .count(): reuses the prefetch
 
     class Meta:
         model = Order
@@ -140,6 +150,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "total",
             "currency",
             "notes",
+            "item_count",
             "items",
             "created_at",
             "updated_at",

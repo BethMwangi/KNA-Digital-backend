@@ -33,7 +33,11 @@ class DownloadListView(generics.ListAPIView):
         user = self.request.user
         if not user or not user.is_authenticated:
             return Download.objects.none()
-        return Download.objects.filter(user=user).select_related("asset", "license", "order")
+        return (
+            Download.objects.filter(user=user)
+            .select_related("asset", "license", "order")
+            .prefetch_related("asset__variants")
+        )
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)
