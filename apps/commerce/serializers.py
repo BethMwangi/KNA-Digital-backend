@@ -94,6 +94,23 @@ class AddToCartSerializer(serializers.Serializer):
         return value
 
 
+class CartSyncSerializer(serializers.Serializer):
+    """Accepts an array of items to completely replace the user's current cart."""
+
+    items = AddToCartSerializer(many=True)
+
+    def validate_items(self, value):
+        seen = set()
+        for item in value:
+            pair = (item["asset_id"], item["license_id"])
+            if pair in seen:
+                raise serializers.ValidationError(
+                    "Duplicate items (same asset and license) are not allowed."
+                )
+            seen.add(pair)
+        return value
+
+
 # ------------------------------------------------------------------ #
 # Orders
 # ------------------------------------------------------------------ #

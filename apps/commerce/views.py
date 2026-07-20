@@ -5,7 +5,7 @@ All responses use the SDD §16.2 envelope.
 """
 
 import logging
-
+from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.response import Response
@@ -16,6 +16,7 @@ from .models import CartItem, License, Order, ShoppingCart
 from .serializers import (
     AddToCartSerializer,
     CartDetailSerializer,
+    CartSyncSerializer,
     CheckoutSerializer,
     LicenseSerializer,
     OrderSerializer,
@@ -176,6 +177,36 @@ class CartClearView(generics.GenericAPIView):
             pass
         logger.info("CART CLEAR user=%s removed=%d items", request.user.email, removed)
         return api_response(message="Cart cleared.")
+
+
+@extend_schema(
+    summary="Sync cart",
+    description="Completely replace the user's cart with the provided items array.",
+    request=CartSyncSerializer,
+    responses=CartDetailSerializer,
+)
+class CartSyncView(generics.GenericAPIView):
+    """POST /api/v1/cart/sync/ — bulk update cart."""
+
+    serializer_class = CartSyncSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAccountActive]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        cart, _ = ShoppingCart.objects.get_or_create(user=request.user)
+
+        with transaction.atomic():
+            cart.items.all().delete()
+            new_items = [
+                CartItem(cart=cart, asset_id=item["asset_id"], license_id=item["license_id"])
+                for item in serializer.validated_data["items"]
+            ]
+            CartItem.objects.bulk_create(new_items)
+
+        cart_serializer = CartDetailSerializer(cart)
+        return api_response(message="Cart synchronized.", data=cart_serializer.data)
 
 
 # ------------------------------------------------------------------ #
