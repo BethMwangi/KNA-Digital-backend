@@ -1,3 +1,5 @@
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -65,6 +67,11 @@ class Collection(BaseModel):
 class Tag(BaseModel):
     name = models.CharField(max_length=50, unique=True)
     slug = models.SlugField(max_length=50, unique=True)
+
+    class Meta(BaseModel.Meta):
+        indexes = [
+            GinIndex(fields=["name"], name="tag_name_trgm_gin", opclasses=["gin_trgm_ops"]),
+        ]
 
     def __str__(self):
         return self.name
@@ -138,10 +145,19 @@ class DigitalAsset(BaseModel):
     # the buyer selects at checkout. NULL until priced (not yet purchasable).
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
+    # Denormalized, GIN-indexed search column (title/caption/description,
+    # weighted) — kept in sync by apps.assets.search.sync_search_vector()
+    # on every save. See apps/assets/search.py for the query side.
+    search_vector = SearchVectorField(null=True, blank=True, editable=False)
+
     class Meta:
         verbose_name = _("Digital Asset")
         verbose_name_plural = _("Digital Assets")
         ordering = ["-created_at"]
+        indexes = [
+            GinIndex(fields=["search_vector"], name="asset_search_vector_gin"),
+            GinIndex(fields=["title"], name="asset_title_trgm_gin", opclasses=["gin_trgm_ops"]),
+        ]
 
     def __str__(self):
         return f"{self.asset_number} - {self.title}"
@@ -186,6 +202,10 @@ class AssetMetadata(BaseModel):
 
     class Meta:
         verbose_name_plural = "Asset Metadata"
+        indexes = [
+            GinIndex(fields=["keywords"], name="assetmeta_kw_trgm", opclasses=["gin_trgm_ops"]),
+            GinIndex(fields=["location"], name="assetmeta_loc_trgm", opclasses=["gin_trgm_ops"]),
+        ]
 
     def __str__(self):
         return f"Metadata for {self.asset.title}"

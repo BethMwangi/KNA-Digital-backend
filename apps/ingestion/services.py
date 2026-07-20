@@ -31,6 +31,7 @@ from apps.assets.models import (
     DigitalAsset,
     Tag,
 )
+from apps.assets.search import sync_search_vector
 
 from . import normalizers as nz
 from .models import AssetSyncRecord, LegacyCodeMap, SyncRun
@@ -311,6 +312,7 @@ def _sync_one(rec: dict) -> tuple[str, AssetSyncRecord]:
         _map_metadata(asset, rec)
         _map_tags(asset, rec)
         _map_variants(asset, rec)
+        sync_search_vector(asset.id)
         sync = AssetSyncRecord.objects.create(
             external_id=external_id,
             external_refno=refno,
@@ -339,6 +341,7 @@ def _sync_one(rec: dict) -> tuple[str, AssetSyncRecord]:
     _map_metadata(asset, rec)
     _map_tags(asset, rec)
     _map_variants(asset, rec)
+    sync_search_vector(asset.id)
     sync.checksum = checksum
     sync.payload = rec
     sync.external_refno = refno
