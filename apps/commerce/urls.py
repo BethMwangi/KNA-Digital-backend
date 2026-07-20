@@ -13,6 +13,7 @@ cart_patterns = [
     path("", views.CartView.as_view(), name="cart"),
     path("items/<uuid:pk>/", views.CartItemDeleteView.as_view(), name="cart-item-delete"),
     path("clear/", views.CartClearView.as_view(), name="cart-clear"),
+    path("sync/", views.CartSyncView.as_view(), name="cart-sync"),
 ]
 
 urlpatterns = [

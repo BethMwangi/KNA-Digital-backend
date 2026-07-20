@@ -1,5 +1,6 @@
 """Commerce serializers — Licenses, Cart, Orders."""
 
+import logging
 import uuid
 
 from django.db import transaction
@@ -7,7 +8,6 @@ from rest_framework import serializers
 
 from apps.assets.models import DigitalAsset
 from apps.assets.serializers import public_variant_url
-from apps.downloads.models import Download
 
 from .models import (
     CartItem,
@@ -16,6 +16,8 @@ from .models import (
     OrderItem,
     ShoppingCart,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------------ #
@@ -92,6 +94,23 @@ class AddToCartSerializer(serializers.Serializer):
         return value
 
 
+class CartSyncSerializer(serializers.Serializer):
+    """Accepts an array of items to completely replace the user's current cart."""
+
+    items = AddToCartSerializer(many=True)
+
+    def validate_items(self, value):
+        seen = set()
+        for item in value:
+            pair = (item["asset_id"], item["license_id"])
+            if pair in seen:
+                raise serializers.ValidationError(
+                    "Duplicate items (same asset and license) are not allowed."
+                )
+            seen.add(pair)
+        return value
+
+
 # ------------------------------------------------------------------ #
 # Orders
 # ------------------------------------------------------------------ #
@@ -129,8 +148,10 @@ class OrderSerializer(serializers.ModelSerializer):
 
 class CheckoutSerializer(serializers.Serializer):
     """
-    Creates an Order from the current cart contents.
-    The cart is cleared after a successful order is placed.
+    Creates a PENDING Order from the current cart contents and clears the
+    cart. Download entitlements are NOT created here — they're granted
+    only once a payment actually completes (see apps.payments.services);
+    an unpaid order buys nothing.
     """
 
     notes = serializers.CharField(required=False, default="", allow_blank=True)
@@ -172,20 +193,27 @@ class CheckoutSerializer(serializers.Serializer):
             ]
             OrderItem.objects.bulk_create(order_items)
 
-            # Create download records so the user can download the assets
-            downloads = [
-                Download(
-                    user=user,
-                    order=order,
-                    asset=item.asset,
-                    license=item.license,
-                    max_downloads=5,
-                )
-                for item in cart_items
-            ]
-            Download.objects.bulk_create(downloads)
+            # Clear the cart after checkout. hard_delete: soft-deleted
+            # rows would still hold the (cart, asset, license) unique
+            # slots and block buying the same asset again later.
+            cart_items.hard_delete()
 
-            # Clear the cart after checkout
-            cart_items.delete()
-
+        for oi in order_items:
+            logger.info(
+                "  order item %s: %s (%.40s) @ %s KES [%s]",
+                order.order_number,
+                oi.asset.asset_number,
+                oi.asset_title_snapshot,
+                oi.price_at_purchase,
+                oi.license.name,
+            )
+        logger.info(
+            "ORDER PLACED %s user=%s items=%d subtotal=%s tax=%s total=%s KES",
+            order.order_number,
+            user.email,
+            len(order_items),
+            subtotal,
+            tax,
+            total,
+        )
         return order

@@ -31,6 +31,7 @@ from apps.assets.models import (
     DigitalAsset,
     Tag,
 )
+from apps.assets.search import sync_search_vector
 
 from . import normalizers as nz
 from .models import AssetSyncRecord, LegacyCodeMap, SyncRun
@@ -197,6 +198,9 @@ def _map_metadata(asset: DigitalAsset, rec: dict) -> None:
             "headline": nz.sentence_case(rec.get("image_headline"))[:255],
             "historical_period": "",
             "language": "en",
+            # Digitisation date — the only date the source has for many
+            # records; frontend shows it when publication_date is null.
+            "date_digitized": nz.parse_date(rec.get("date_image_injested")),
         },
     )
 
@@ -308,6 +312,7 @@ def _sync_one(rec: dict) -> tuple[str, AssetSyncRecord]:
         _map_metadata(asset, rec)
         _map_tags(asset, rec)
         _map_variants(asset, rec)
+        sync_search_vector(asset.id)
         sync = AssetSyncRecord.objects.create(
             external_id=external_id,
             external_refno=refno,
@@ -336,6 +341,7 @@ def _sync_one(rec: dict) -> tuple[str, AssetSyncRecord]:
     _map_metadata(asset, rec)
     _map_tags(asset, rec)
     _map_variants(asset, rec)
+    sync_search_vector(asset.id)
     sync.checksum = checksum
     sync.payload = rec
     sync.external_refno = refno

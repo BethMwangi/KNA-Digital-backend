@@ -4,6 +4,8 @@ Commerce API views — Cart, Checkout, Orders, Licenses (SDD §16.8–§16.12).
 All responses use the SDD §16.2 envelope.
 """
 
+import logging
+from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.response import Response
@@ -14,10 +16,13 @@ from .models import CartItem, License, Order, ShoppingCart
 from .serializers import (
     AddToCartSerializer,
     CartDetailSerializer,
+    CartSyncSerializer,
     CheckoutSerializer,
     LicenseSerializer,
     OrderSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def api_response(*, message: str, data=None, success: bool = True, status_code=status.HTTP_200_OK):
@@ -90,13 +95,26 @@ class CartView(generics.GenericAPIView):
 
         # Prevent duplicates (same asset + same declared usage already in cart)
         if cart.items.filter(asset_id=asset_id, license_id=license_id).exists():
+            logger.info(
+                "CART ADD rejected (duplicate) user=%s asset=%s", request.user.email, asset_id
+            )
             return api_response(
                 success=False,
                 message="This item is already in your cart.",
                 status_code=status.HTTP_409_CONFLICT,
             )
 
-        CartItem.objects.create(cart=cart, asset_id=asset_id, license_id=license_id)
+        item = CartItem.objects.create(cart=cart, asset_id=asset_id, license_id=license_id)
+        logger.info(
+            "CART ADD user=%s asset=%s (%s) license=%s price=%s | cart now %d item(s), total=%s KES",
+            request.user.email,
+            item.asset.asset_number,
+            item.asset.title[:40],
+            item.license.name,
+            item.asset.price,
+            cart.item_count,
+            cart.total,
+        )
         cart_serializer = CartDetailSerializer(cart)
         return api_response(
             message="Item added to cart.",
@@ -122,8 +140,17 @@ class CartItemDeleteView(generics.DestroyAPIView):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+        asset_number, title = instance.asset.asset_number, instance.asset.title
         instance.delete(hard=True)  # cart items are truly deleted, not soft-deleted
         cart = ShoppingCart.objects.get(user=request.user)
+        logger.info(
+            "CART REMOVE user=%s asset=%s (%s) | cart now %d item(s), total=%s KES",
+            request.user.email,
+            asset_number,
+            title[:40],
+            cart.item_count,
+            cart.total,
+        )
         serializer = CartDetailSerializer(cart)
         return api_response(message="Item removed from cart.", data=serializer.data)
 
@@ -140,12 +167,46 @@ class CartClearView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated, IsAccountActive]
 
     def post(self, request):
+        removed = 0
         try:
             cart = ShoppingCart.objects.get(user=request.user)
-            cart.items.all().delete()
+            # hard_delete: a soft-deleted row would still hold the
+            # (cart, asset, license) unique slot and block re-adding.
+            removed = cart.items.all().hard_delete()[0]
         except ShoppingCart.DoesNotExist:
             pass
+        logger.info("CART CLEAR user=%s removed=%d items", request.user.email, removed)
         return api_response(message="Cart cleared.")
+
+
+@extend_schema(
+    summary="Sync cart",
+    description="Completely replace the user's cart with the provided items array.",
+    request=CartSyncSerializer,
+    responses=CartDetailSerializer,
+)
+class CartSyncView(generics.GenericAPIView):
+    """POST /api/v1/cart/sync/ — bulk update cart."""
+
+    serializer_class = CartSyncSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAccountActive]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        cart, _ = ShoppingCart.objects.get_or_create(user=request.user)
+
+        with transaction.atomic():
+            cart.items.all().delete()
+            new_items = [
+                CartItem(cart=cart, asset_id=item["asset_id"], license_id=item["license_id"])
+                for item in serializer.validated_data["items"]
+            ]
+            CartItem.objects.bulk_create(new_items)
+
+        cart_serializer = CartDetailSerializer(cart)
+        return api_response(message="Cart synchronized.", data=cart_serializer.data)
 
 
 # ------------------------------------------------------------------ #

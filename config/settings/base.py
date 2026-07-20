@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     # Third-party
+    "django.contrib.postgres",  # registers trigram_similar/search lookups
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
@@ -40,6 +41,7 @@ INSTALLED_APPS = [
     "apps.ingestion",
     "apps.commerce",
     "apps.downloads",
+    "apps.payments",
 ]
 
 MIDDLEWARE = [
@@ -120,6 +122,9 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {"anon": "60/min", "user": "300/min"},
     "DEFAULT_SCHEMA_CLASS": "core.schema.AppGroupedAutoSchema",
     "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",
+    # Money fields (price, subtotal, total) serialize as JSON numbers
+    # (1500.0), not strings ("1500.00") — what the storefront expects.
+    "COERCE_DECIMAL_TO_STRING": False,
 }
 
 SIMPLE_JWT = {

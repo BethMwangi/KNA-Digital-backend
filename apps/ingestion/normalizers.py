@@ -24,7 +24,7 @@ MOJIBAKE = {
     "Â": "",
 }
 
-REFNO_RE = re.compile(r"^\d{1,5}/\d{1,5}$")  # "1398/254"
+REFNO_RE = re.compile(r"^\d{1,5}[/_-]\d{1,5}$")  # "1398/254", "761_21"
 WS_RE = re.compile(r"\s+")
 
 # Words that stay capitalised when we sentence-case shouting text
