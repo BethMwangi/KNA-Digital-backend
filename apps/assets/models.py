@@ -204,6 +204,7 @@ class AssetMetadata(BaseModel):
         verbose_name_plural = "Asset Metadata"
         indexes = [
             GinIndex(fields=["keywords"], name="assetmeta_kw_trgm", opclasses=["gin_trgm_ops"]),
+            GinIndex(fields=["location"], name="assetmeta_loc_trgm", opclasses=["gin_trgm_ops"]),
         ]
 
     def __str__(self):

@@ -69,6 +69,8 @@ def search_assets(query: str, queryset: QuerySet) -> tuple[QuerySet, str]:
             Q(search_vector=sq)
             | Q(tags__name__trigram_similar=query)
             | Q(metadata__keywords__trigram_similar=query)
+            | Q(metadata__location__trigram_similar=query)
+            | Q(metadata__county__trigram_similar=query)
             | Q(photographer__trigram_similar=query)
         )
         .annotate(rank=SearchRank(build_search_vector(), sq))

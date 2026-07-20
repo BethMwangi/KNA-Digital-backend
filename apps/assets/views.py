@@ -17,6 +17,7 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import IsContentEditorOrAbove
 
+from .filters import DigitalAssetFilter
 from .models import Category, Collection, DigitalAsset, Tag
 from .search import search_assets, suggest_assets
 from .serializers import (
@@ -118,7 +119,7 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
     )
     # prefetch related fields to avoid N+1 queries
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ["category", "collection", "asset_type", "publication_date"]
+    filterset_class = DigitalAssetFilter
     search_fields = ["title", "description", "caption", "metadata__keywords"]
     ordering_fields = ["publication_date", "created_at"]
     ordering = ["-created_at"]
@@ -191,16 +192,13 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
     def search(self, request):
         """
         Full-text search, ranked by relevance, with an automatic
-        typo-tolerant fallback (see apps.assets.search). Same category/
-        collection/asset_type narrowing as the list endpoint, applied
-        before ranking. Empty ?q= just returns the newest first.
+        typo-tolerant fallback (see apps.assets.search). Same
+        category/collection/asset_type/date_from/date_to/year narrowing
+        as the list endpoint (via DigitalAssetFilter), applied before
+        ranking. Empty ?q= just returns the newest first.
         """
         query = (request.query_params.get("q") or request.query_params.get("search") or "").strip()
-        queryset = self.get_queryset()
-        for field in ("category", "collection", "asset_type"):
-            value = request.query_params.get(field)
-            if value:
-                queryset = queryset.filter(**{field: value})
+        queryset = DigitalAssetFilter(request.GET, queryset=self.get_queryset()).qs
 
         if query:
             queryset, match_type = search_assets(query, queryset)
