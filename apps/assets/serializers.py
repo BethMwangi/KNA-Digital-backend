@@ -102,6 +102,20 @@ class AssetMetadataSerializer(serializers.ModelSerializer):
 # ------------------------------------------------------------------ #
 # List (lightweight) vs Detail (full) asset serializers
 # ------------------------------------------------------------------ #
+class AssetSuggestSerializer(serializers.ModelSerializer):
+    """Minimal shape for the live as-you-type dropdown — no nested
+    category/collection/tags, keeps the response tiny and fast."""
+
+    thumbnail = serializers.SerializerMethodField()
+
+    def get_thumbnail(self, obj):
+        return public_variant_url(obj, "thumbnail") or public_variant_url(obj, "preview")
+
+    class Meta:
+        model = DigitalAsset
+        fields = ["id", "asset_number", "title", "thumbnail", "price"]
+
+
 class DigitalAssetListSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     collection = CollectionSerializer(read_only=True)

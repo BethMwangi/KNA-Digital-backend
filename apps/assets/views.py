@@ -18,7 +18,9 @@ from rest_framework.response import Response
 from apps.accounts.permissions import IsContentEditorOrAbove
 
 from .models import Category, Collection, DigitalAsset, Tag
+from .search import search_assets, suggest_assets
 from .serializers import (
+    AssetSuggestSerializer,
     CategorySerializer,
     CollectionSerializer,
     DigitalAssetCreateSerializer,
@@ -129,7 +131,7 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
         return DigitalAssetListSerializer
 
     def get_permissions(self):
-        if self.action in ["list", "retrieve", "featured", "latest", "search"]:
+        if self.action in ["list", "retrieve", "featured", "latest", "search", "suggest"]:
             return [permissions.AllowAny()]
         # create, update, partial_update, destroy, publish, archive → editor+
         return [permissions.IsAuthenticated(), IsContentEditorOrAbove()]
@@ -185,14 +187,54 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
         return api_response(message="Latest assets retrieved.", data=serializer.data)
 
     @action(detail=False, methods=["get"])
+    @vary_auth
     def search(self, request):
-        queryset = self.filter_queryset(self.get_queryset())
+        """
+        Full-text search, ranked by relevance, with an automatic
+        typo-tolerant fallback (see apps.assets.search). Same category/
+        collection/asset_type narrowing as the list endpoint, applied
+        before ranking. Empty ?q= just returns the newest first.
+        """
+        query = (request.query_params.get("q") or request.query_params.get("search") or "").strip()
+        queryset = self.get_queryset()
+        for field in ("category", "collection", "asset_type"):
+            value = request.query_params.get(field)
+            if value:
+                queryset = queryset.filter(**{field: value})
+
+        if query:
+            queryset, match_type = search_assets(query, queryset)
+        else:
+            queryset, match_type = queryset.order_by("-created_at"), "none"
+
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            paginated = self.get_paginated_response(serializer.data)
+            paginated.data["query"] = query
+            paginated.data["match_type"] = match_type
+            return api_response(message="Search results.", data=paginated.data)
+
         serializer = self.get_serializer(queryset, many=True)
-        return api_response(message="Search results.", data=serializer.data)
+        return api_response(
+            message="Search results.",
+            data={"results": serializer.data, "query": query, "match_type": match_type},
+        )
+
+    @action(detail=False, methods=["get"])
+    @vary_auth
+    def suggest(self, request):
+        """GET /api/v1/assets/suggest/?q=ken — top 8 matches for a live
+        as-you-type dropdown. Deliberately unpaginated and lightweight.
+        Always {"results": [...]} (never a bare list) — api_response's
+        `data or {}` would otherwise collapse a genuinely empty list to
+        {}, which is surprising for a frontend expecting an array."""
+        query = (request.query_params.get("q") or "").strip()
+        if not query:
+            return api_response(message="Suggestions retrieved.", data={"results": []})
+        results = suggest_assets(query, self.get_queryset())
+        serializer = AssetSuggestSerializer(results, many=True)
+        return api_response(message="Suggestions retrieved.", data={"results": serializer.data})
 
     @action(detail=True, methods=["post"])
     def publish(self, request, pk=None):

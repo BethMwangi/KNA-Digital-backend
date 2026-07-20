@@ -24,6 +24,7 @@ from django.db import transaction
 from django.db.models import ProtectedError
 
 from apps.assets.models import DigitalAsset
+from apps.assets.search import sync_search_vector
 from apps.ingestion.models import AssetSyncRecord
 from apps.ingestion.services import (
     _map_fields,
@@ -110,6 +111,7 @@ class Command(BaseCommand):
                         _map_metadata(asset, rec)
                         _map_tags(asset, rec)
                         _map_variants(asset, rec)
+                        sync_search_vector(asset.id)
                         sync.asset = asset
                         sync.save(update_fields=["asset", "last_synced_at"])
                         old.delete(hard=True)
@@ -120,6 +122,7 @@ class Command(BaseCommand):
                         _map_metadata(asset, rec)
                         _map_tags(asset, rec)
                         _map_variants(asset, rec)
+                        sync_search_vector(asset.id)
                 remapped += 1
                 logger.info("REMAPPED %s -> %.60s", asset.asset_number, asset.title)
             except Exception as exc:  # noqa: BLE001
