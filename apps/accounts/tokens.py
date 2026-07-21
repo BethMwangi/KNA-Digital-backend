@@ -46,7 +46,11 @@ def decode_uid(uidb64: str):
 # --------------------------------------------------------------------- #
 def send_verification_email(user) -> None:
     token = email_verification_token.make_token(user)
-    link = f"{settings.FRONTEND_URL}/verify-email?uid={encode_uid(user)}&token={token}"
+    # Path must match the frontend's actual route (/auth/verify, confirmed
+    # live) — NOT /verify-email, which 404s. Frontend routes changed once
+    # already; if this starts 404ing again, re-check with the frontend team
+    # before assuming the backend link format is wrong.
+    link = f"{settings.FRONTEND_URL}/auth/verify?uid={encode_uid(user)}&token={token}"
     send_mail(
         subject="Verify your Kenya News Agency Archive account",
         message=(
@@ -62,7 +66,9 @@ def send_verification_email(user) -> None:
 
 def send_password_reset_email(user) -> None:
     token = password_reset_token.make_token(user)
-    link = f"{settings.FRONTEND_URL}/reset-password?uid={encode_uid(user)}&token={token}"
+    # Path must match the frontend's actual route (/auth/reset, confirmed
+    # live) — NOT /reset-password, which 404s.
+    link = f"{settings.FRONTEND_URL}/auth/reset?uid={encode_uid(user)}&token={token}"
     send_mail(
         subject="Reset your password",
         message=(
