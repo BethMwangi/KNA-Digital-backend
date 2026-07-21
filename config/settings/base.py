@@ -246,3 +246,13 @@ if REDIS_URL:
 else:
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 API_CACHE_TTL = env.int("API_CACHE_TTL", default=900)  # seconds; public reads
+
+# ------------------------------------------------------------------ #
+# Meilisearch — self-hosted, free (MIT license), typo-tolerant search.
+# Empty MEILISEARCH_URL means "not configured": apps.assets.search falls
+# back to the Postgres full-text/trigram engine automatically, so search
+# never hard-fails if this service is down or not deployed yet.
+# ------------------------------------------------------------------ #
+MEILISEARCH_URL = env("MEILISEARCH_URL", default="")
+MEILISEARCH_MASTER_KEY = env("MEILISEARCH_MASTER_KEY", default="")
+MEILISEARCH_INDEX = env("MEILISEARCH_INDEX", default="assets")

@@ -11,3 +11,4 @@ Pillow>=11.0
 requests>=2.32
 celery>=5.4
 redis>=5.0
+meilisearch>=0.31

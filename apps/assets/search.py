@@ -1,17 +1,25 @@
 """
-Catalogue search — Postgres full-text + trigram fuzzy fallback. No
-external service (Algolia/Meilisearch/Elasticsearch) needed at this
-scale; revisit only if the catalogue grows into the hundreds of
+Catalogue search — Postgres full-text (prefix-matching) + trigram fuzzy
+fallback. No external service (Algolia/Meilisearch/Elasticsearch) needed
+at this scale; revisit only if the catalogue grows into the hundreds of
 thousands and relevance tuning outgrows what's here.
 
 How a query resolves:
-  1. Ranked full-text match against DigitalAsset.search_vector (a
-     stored, GIN-indexed column — see sync_search_vector below) OR'd
-     with a widen pass across tags/keywords/photographer (join'd
-     tables, not in the vector, matched via trigram/icontains).
-  2. If that returns nothing, fall back to trigram similarity on
-     title — catches typos ("keniatta" -> "Kenyatta") the dictionary-
-     based full-text search can't.
+  1. PREFIX full-text match against DigitalAsset.search_vector (a
+     stored, GIN-indexed column — see sync_search_vector below): every
+     word in the query is treated as a prefix ("gri" matches "griffine"),
+     because this is a live search-as-you-type box, not a
+     submit-and-wait search form — a plain dictionary match
+     (websearch_to_tsquery) only matches whole words, so it works for
+     "griffin" but returns nothing (or the wrong thing, once the fuzzy
+     fallback kicks in) for "gri" while the user is still typing it.
+     Trade-off: prefix mode loses websearch's quoted-phrase/-exclusion
+     syntax — acceptable for a type-ahead box.
+     OR'd with a widen pass across tags/keywords/location/photographer
+     (joined tables, not in the vector, matched via trigram).
+  2. If that returns nothing, fall back to word-level trigram
+     similarity on title — catches genuine typos ("keniatta" ->
+     "Kenyatta") that not even a prefix match would catch.
 
 search_vector itself must be kept in sync on every asset write — see
 sync_search_vector(), called from the ingestion pipeline and
@@ -19,6 +27,7 @@ reseed_assets after every _map_fields()+save().
 """
 
 import logging
+import re
 import time
 
 from django.contrib.postgres.search import (
@@ -34,6 +43,19 @@ from .models import DigitalAsset
 logger = logging.getLogger(__name__)
 
 FUZZY_THRESHOLD = 0.15  # trigram similarity floor; lower = more forgiving
+_WORD_RE = re.compile(r"\w+", re.UNICODE)
+
+
+def _prefix_tsquery(query: str) -> str | None:
+    """'mary gri' -> 'mary:* & gri:*' — every extracted word becomes a
+    prefix match, so a still-being-typed last word matches, and complete
+    earlier words still match exactly (a prefix of itself). Word
+    extraction only keeps \\w+ tokens, so this is safe to feed straight
+    into SearchQuery(..., search_type="raw") with no further escaping."""
+    words = _WORD_RE.findall(query)
+    if not words:
+        return None
+    return " & ".join(f"{w}:*" for w in words)
 
 
 def build_search_vector() -> SearchVector:
@@ -63,7 +85,10 @@ def search_assets(query: str, queryset: QuerySet) -> tuple[QuerySet, str]:
         return queryset, "none"
 
     started = time.monotonic()
-    sq = SearchQuery(query, search_type="websearch", config="english")
+    prefix_expr = _prefix_tsquery(query)
+    if prefix_expr is None:
+        return queryset, "none"
+    sq = SearchQuery(prefix_expr, search_type="raw", config="english")
     ranked = (
         queryset.filter(
             Q(search_vector=sq)

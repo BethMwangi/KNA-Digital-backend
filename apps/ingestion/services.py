@@ -23,6 +23,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
+from apps.assets.meilisearch_client import index_asset
 from apps.assets.models import (
     AssetMetadata,
     AssetVariant,
@@ -313,6 +314,7 @@ def _sync_one(rec: dict) -> tuple[str, AssetSyncRecord]:
         _map_tags(asset, rec)
         _map_variants(asset, rec)
         sync_search_vector(asset.id)
+        index_asset(asset)
         sync = AssetSyncRecord.objects.create(
             external_id=external_id,
             external_refno=refno,
