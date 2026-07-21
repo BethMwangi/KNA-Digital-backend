@@ -40,8 +40,9 @@ def decode_uid(uidb64: str):
 
 
 # --------------------------------------------------------------------- #
-# Transactional emails (SDD §21). Swap the console backend for SMTP or a
-# provider (e.g. Resend, SES, Postmark) via env vars — no code changes.
+# Transactional emails (SDD §21). Called from apps/accounts/tasks.py,
+# off the request path — see that module for why. Swap EMAIL_BACKEND via
+# env var (console / Resend / SMTP) — no code changes needed here.
 # --------------------------------------------------------------------- #
 def send_verification_email(user) -> None:
     token = email_verification_token.make_token(user)

@@ -53,6 +53,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.RequestLogMiddleware",  # one line per request in the logs
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -150,7 +151,15 @@ SPECTACULAR_SETTINGS = {
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[FRONTEND_URL])
 CORS_ALLOWED_ORIGIN_REGEXES = [r"^https://.*\.vercel\.app$"]
 # ------------------------------------------------------------------ #
-# Email (SDD §21) — console in dev, SMTP/provider in production
+# Email (SDD §21) — console in dev.
+#
+# Production: use core.email_backends.ResendEmailBackend, NOT raw SMTP.
+# Render (and most PaaS hosts) blocks/drops outbound SMTP (port 587) to
+# prevent spam abuse — confirmed here: a registration request hung for
+# exactly Gunicorn's 30s timeout trying to reach smtp.gmail.com and got
+# killed (500), even though the same Gmail credentials work fine from a
+# normal network. Resend's HTTPS API sidesteps the block entirely and is
+# free for this volume (100/day, 3,000/month).
 # ------------------------------------------------------------------ #
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
 EMAIL_HOST = env("EMAIL_HOST", default="")
@@ -159,6 +168,7 @@ EMAIL_HOST_USER = env("EMAIL_USERNAME", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_PASSWORD", default="")
 EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@archive.kna.go.ke")
+RESEND_API_KEY = env("RESEND_API_KEY", default="")
 
 # ------------------------------------------------------------------ #
 # I18N / static

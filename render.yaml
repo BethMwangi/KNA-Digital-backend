@@ -9,6 +9,10 @@ services:
         value: 3.13.0
       - key: DJANGO_SETTINGS_MODULE
         value: config.settings.production
+      - key: PYTHONUNBUFFERED
+        value: "1" # without this, log output can be delayed/lost in a container
+      - key: LOG_LEVEL
+        value: INFO
       - key: SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
