@@ -23,6 +23,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.db.models import ProtectedError
 
+from apps.assets.meilisearch_client import index_asset, remove_asset
 from apps.assets.models import DigitalAsset
 from apps.assets.search import sync_search_vector
 from apps.ingestion.models import AssetSyncRecord
@@ -112,8 +113,10 @@ class Command(BaseCommand):
                         _map_tags(asset, rec)
                         _map_variants(asset, rec)
                         sync_search_vector(asset.id)
+                        index_asset(asset)
                         sync.asset = asset
                         sync.save(update_fields=["asset", "last_synced_at"])
+                        remove_asset(old.id)  # old row's id is gone; drop it from the index too
                         old.delete(hard=True)
                     else:
                         asset = sync.asset
@@ -123,6 +126,7 @@ class Command(BaseCommand):
                         _map_tags(asset, rec)
                         _map_variants(asset, rec)
                         sync_search_vector(asset.id)
+                        index_asset(asset)
                 remapped += 1
                 logger.info("REMAPPED %s -> %.60s", asset.asset_number, asset.title)
             except Exception as exc:  # noqa: BLE001

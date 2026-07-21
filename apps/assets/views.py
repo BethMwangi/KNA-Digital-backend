@@ -6,6 +6,7 @@ Follows SDD §16.2 response envelope and RBAC from accounts.permissions.
 
 from django.conf import settings
 from django.db.models import Count, Q
+from django.utils.dateparse import parse_date
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_headers
@@ -14,10 +15,13 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
+from rest_framework.utils.urls import remove_query_param, replace_query_param
 
 from apps.accounts.permissions import IsContentEditorOrAbove
 
+from . import meilisearch_client
 from .filters import DigitalAssetFilter
+from .meilisearch_client import index_asset
 from .models import Category, Collection, DigitalAsset, Tag
 from .search import search_assets, suggest_assets
 from .serializers import (
@@ -187,19 +191,84 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(latest_assets, many=True)
         return api_response(message="Latest assets retrieved.", data=serializer.data)
 
+    def _meili_filters(self, request):
+        """Pull the same filter params DigitalAssetFilter understands,
+        for the Meilisearch path (which doesn't use django-filter)."""
+        params = request.query_params
+        return {
+            "category_id": params.get("category") or None,
+            "collection_id": params.get("collection") or None,
+            "asset_type": params.get("asset_type") or None,
+            "year": params.get("year") or None,
+            "date_from": parse_date(params.get("date_from") or ""),
+            "date_to": parse_date(params.get("date_to") or ""),
+        }
+
+    def _meili_paginated_response(self, request, query, ids, total):
+        """Hydrate Meilisearch's ranked id list from Postgres (source of
+        truth for every field) and build the same paginated envelope the
+        Postgres path returns, so the frontend can't tell which engine
+        answered — only match_type differs ("meilisearch" vs "text")."""
+        page_size = self.paginator.get_page_size(request) or 20
+        by_id = {
+            str(a.id): a
+            for a in self.get_queryset()
+            .filter(id__in=ids)
+            .select_related("category", "collection", "metadata")
+            .prefetch_related("tags", "variants")
+        }
+        ordered = [by_id[i] for i in ids if i in by_id]
+        serializer = self.get_serializer(ordered, many=True)
+
+        page_num = int(request.query_params.get(self.paginator.page_query_param, 1) or 1)
+        base_url = request.build_absolute_uri()
+        next_url = (
+            replace_query_param(base_url, self.paginator.page_query_param, page_num + 1)
+            if page_num * page_size < total
+            else None
+        )
+        prev_url = None
+        if page_num > 2:
+            prev_url = replace_query_param(base_url, self.paginator.page_query_param, page_num - 1)
+        elif page_num == 2:
+            prev_url = remove_query_param(base_url, self.paginator.page_query_param)
+
+        data = {
+            "count": total,
+            "next": next_url,
+            "previous": prev_url,
+            "results": serializer.data,
+            "query": query,
+            "match_type": "meilisearch",
+        }
+        return api_response(message="Search results.", data=data)
+
     @action(detail=False, methods=["get"])
     @vary_auth
     def search(self, request):
         """
-        Full-text search, ranked by relevance, with an automatic
-        typo-tolerant fallback (see apps.assets.search). Same
-        category/collection/asset_type/date_from/date_to/year narrowing
-        as the list endpoint (via DigitalAssetFilter), applied before
-        ranking. Empty ?q= just returns the newest first.
+        Ranked, typo-tolerant search. Meilisearch first if configured
+        (fast, prefix-matching, genuinely free to self-host — see
+        apps.assets.meilisearch_client); falls back to the Postgres
+        full-text/trigram engine (apps.assets.search) automatically if
+        Meilisearch is unset, unreachable, or its index is empty/stale.
+        Same category/collection/asset_type/date_from/date_to/year
+        narrowing either way. Empty ?q= just returns the newest first.
         """
         query = (request.query_params.get("q") or request.query_params.get("search") or "").strip()
-        queryset = DigitalAssetFilter(request.GET, queryset=self.get_queryset()).qs
+        page_num = int(request.query_params.get(self.paginator.page_query_param, 1) or 1)
+        page_size = self.paginator.get_page_size(request) or 20
 
+        if query:
+            meili = meilisearch_client.search(
+                query, page=page_num, page_size=page_size, **self._meili_filters(request)
+            )
+            if meili is not None:
+                ids, total = meili
+                return self._meili_paginated_response(request, query, ids, total)
+
+        # Fallback: Postgres full-text/trigram engine.
+        queryset = DigitalAssetFilter(request.GET, queryset=self.get_queryset()).qs
         if query:
             queryset, match_type = search_assets(query, queryset)
         else:
@@ -224,13 +293,23 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
     def suggest(self, request):
         """GET /api/v1/assets/suggest/?q=ken — top 8 matches for a live
         as-you-type dropdown. Deliberately unpaginated and lightweight.
+        Meilisearch first (its prefix + typo tolerance is exactly what a
+        type-ahead box needs), Postgres fallback otherwise.
         Always {"results": [...]} (never a bare list) — api_response's
         `data or {}` would otherwise collapse a genuinely empty list to
         {}, which is surprising for a frontend expecting an array."""
         query = (request.query_params.get("q") or "").strip()
         if not query:
             return api_response(message="Suggestions retrieved.", data={"results": []})
-        results = suggest_assets(query, self.get_queryset())
+
+        meili = meilisearch_client.search(query, page=1, page_size=8)
+        if meili is not None:
+            ids, _ = meili
+            by_id = {str(a.id): a for a in self.get_queryset().filter(id__in=ids)}
+            results = [by_id[i] for i in ids if i in by_id]
+        else:
+            results = suggest_assets(query, self.get_queryset())
+
         serializer = AssetSuggestSerializer(results, many=True)
         return api_response(message="Suggestions retrieved.", data={"results": serializer.data})
 
@@ -245,6 +324,7 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
             )
         asset.status = DigitalAsset.Status.PUBLISHED
         asset.save(update_fields=["status", "updated_at"])
+        index_asset(asset)
         return api_response(
             message="Asset published.", data={"id": str(asset.id), "status": asset.status}
         )
@@ -256,6 +336,7 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
         asset = self.get_object()
         asset.status = DigitalAsset.Status.ARCHIVED
         asset.save(update_fields=["status", "updated_at"])
+        index_asset(asset)  # no longer published -> index_asset removes it
         return api_response(
             message="Asset archived.", data={"id": str(asset.id), "status": asset.status}
         )
