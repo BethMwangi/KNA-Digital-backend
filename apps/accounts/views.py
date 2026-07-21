@@ -8,7 +8,8 @@ via the api_response helper below (core.exceptions handles errors).
 """
 
 from django.utils import timezone
-from rest_framework import generics, status, viewsets
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import generics, serializers, status, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
@@ -32,12 +33,8 @@ from .serializers import (
     RegisterSerializer,
     UserSerializer,
 )
-from .tokens import (
-    decode_uid,
-    email_verification_token,
-    send_password_reset_email,
-    send_verification_email,
-)
+from .tasks import send_password_reset_email_task, send_verification_email_task
+from .tokens import decode_uid, email_verification_token
 
 
 def api_response(
@@ -76,7 +73,7 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        send_verification_email(user)
+        send_verification_email_task.delay(str(user.id))
         log_event(
             user=user,
             action=AuditLog.Action.REGISTER,
@@ -133,6 +130,13 @@ class RefreshView(TokenRefreshView):
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Log out",
+        description="Blacklists the given refresh token, ending the session.",
+        request=inline_serializer(
+            name="LogoutRequest", fields={"refresh": serializers.CharField()}
+        ),
+    )
     def post(self, request):
         refresh = request.data.get("refresh")
         if not refresh:
@@ -164,12 +168,18 @@ class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [AuthThrottle]
 
+    @extend_schema(
+        summary="Request a password reset",
+        description="Sends a reset link if the email is registered. Always returns the "
+        "same message either way, to avoid revealing whether an account exists.",
+        request=PasswordResetRequestSerializer,
+    )
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = User.objects.filter(email__iexact=serializer.validated_data["email"]).first()
         if user and not user.is_suspended:
-            send_password_reset_email(user)
+            send_password_reset_email_task.delay(str(user.id))
             log_event(
                 user=user,
                 action=AuditLog.Action.PASSWORD_RESET_REQUEST,
@@ -187,6 +197,11 @@ class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [AuthThrottle]
 
+    @extend_schema(
+        summary="Confirm a password reset",
+        description="Sets a new password using the uid+token from the reset email link.",
+        request=PasswordResetConfirmSerializer,
+    )
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -206,6 +221,11 @@ class EmailVerifyView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [AuthThrottle]
 
+    @extend_schema(
+        summary="Verify an email address",
+        description="Confirms the uid+token from the verification email link.",
+        request=EmailVerifySerializer,
+    )
     def post(self, request):
         serializer = EmailVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -263,6 +283,11 @@ class MeView(generics.RetrieveUpdateAPIView):
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated, IsAccountActive]
 
+    @extend_schema(
+        summary="Change password",
+        description="Changes the logged-in user's password, given the current one.",
+        request=ChangePasswordSerializer,
+    )
     def put(self, request):
         serializer = ChangePasswordSerializer(
             data=request.data,
