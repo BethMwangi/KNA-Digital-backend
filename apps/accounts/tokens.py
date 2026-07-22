@@ -53,13 +53,13 @@ def send_verification_email(user) -> None:
     # before assuming the backend link format is wrong.
     link = f"{settings.FRONTEND_URL}/auth/verify?uid={encode_uid(user)}&token={token}"
     send_templated_email(
-        subject="Verify your Kenya News Agency Archive account",
+        subject="Verify your Urithi Archive account",
         template_name="verify_email.html",
         context={"first_name": user.first_name, "verify_url": link},
         recipient_list=[user.email],
         text_body=(
             f"Hello {user.first_name},\n\n"
-            f"Welcome to the KNA Digital Archive. Please verify your email:\n\n{link}\n\n"
+            f"Welcome to Urithi Digital Archive. Please verify your email:\n\n{link}\n\n"
             "If you did not create this account, you can ignore this email."
         ),
     )
