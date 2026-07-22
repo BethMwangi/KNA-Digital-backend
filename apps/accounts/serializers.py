@@ -71,6 +71,12 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs["password"] != attrs.pop("password_confirm"):
             raise serializers.ValidationError({"password_confirm": "Passwords do not match."})
+        user_temp = User(
+            first_name=attrs.get("first_name", ""),
+            last_name=attrs.get("last_name", ""),
+            email=attrs.get("email", ""),
+        )
+        validate_password(attrs["password"], user=user_temp)
         return attrs
 
     def create(self, validated_data):
@@ -138,6 +144,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         user = decode_uid(attrs["uid"])
         if user is None or not password_reset_token.check_token(user, attrs["token"]):
             raise serializers.ValidationError({"token": "Invalid or expired reset link."})
+        validate_password(attrs["new_password"], user=user)
         attrs["user"] = user
         return attrs
 
