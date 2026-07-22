@@ -1,13 +1,7 @@
 """
 Resend HTTP-API email backend.
 
-Why this exists: most PaaS hosts (Render, Heroku, Railway...) block or
-silently drop outbound SMTP (port 587/25/465) to prevent spam abuse.
-Confirmed on this deployment — a registration request hung for exactly
-Gunicorn's 30s worker timeout trying to reach smtp.gmail.com, killing
-the request (500) even though the same credentials connect from a
-normal network in ~3s. HTTPS is never blocked, so a transactional email
-provider's REST API sidesteps the problem entirely. Resend's free tier
+Resend's free tier
 (100/day, 3,000/month) is plenty for order receipts + password resets.
 
 Drop-in: implements Django's BaseEmailBackend, so every existing
@@ -46,6 +40,14 @@ class ResendEmailBackend(BaseEmailBackend):
                 "subject": message.subject,
                 "text": message.body,
             }
+            # EmailMultiAlternatives.attach_alternative(html, "text/html")
+            # populates .alternatives — send both parts so HTML-capable
+            # clients render the styled template and everything else
+            # falls back to the plain-text body untouched.
+            for content, mimetype in getattr(message, "alternatives", []):
+                if mimetype == "text/html":
+                    payload["html"] = content
+                    break
             if message.cc:
                 payload["cc"] = list(message.cc)
             if message.bcc:

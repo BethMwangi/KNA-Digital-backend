@@ -1,0 +1,33 @@
+{% extends "emails/base_email.html" %}
+{% block subject %}Payment received — order {{ order_number }}{% endblock %}
+{% block preheader %}Your order is confirmed. Your downloads are ready in your account.{% endblock %}
+{% block headline %}Payment received{% endblock %}
+{% block body %}
+<p style="margin:0 0 20px 0;">Hello {{ first_name }},</p>
+<p style="margin:0 0 24px 0;">Your payment for order <strong>{{ order_number }}</strong> was successful. Here's what you bought:</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px;">
+  <tr>
+    <td style="padding:8px 0;border-bottom:2px solid #17150F;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:#8A8371;">Item</td>
+    <td style="padding:8px 0;border-bottom:2px solid #17150F;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:#8A8371;">License</td>
+    <td align="right" style="padding:8px 0;border-bottom:2px solid #17150F;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:#8A8371;">Price</td>
+  </tr>
+  {% for item in items %}
+  <tr>
+    <td style="padding:10px 8px 10px 0;border-bottom:1px solid #E9E2CC;font-size:14px;">{{ item.title }}</td>
+    <td style="padding:10px 8px 10px 0;border-bottom:1px solid #E9E2CC;font-size:14px;color:#8A8371;">{{ item.license }}</td>
+    <td align="right" style="padding:10px 0;border-bottom:1px solid #E9E2CC;font-size:14px;white-space:nowrap;">KES {{ item.price }}</td>
+  </tr>
+  {% endfor %}
+  <tr>
+    <td colspan="2" style="padding:14px 8px 0 0;font-size:15px;font-weight:600;">Total paid</td>
+    <td align="right" style="padding:14px 0 0 0;font-size:15px;font-weight:600;white-space:nowrap;">KES {{ total }}</td>
+  </tr>
+</table>
+{% endblock %}
+{% block cta %}
+{% include "emails/_button.html" with url=downloads_url label="Go to my downloads" %}
+{% endblock %}
+{% block footer_note %}
+Thank you for supporting the Kenya News Agency Digital Archive. Order confirmations and download entitlements are also always available from your account at any time.
+{% endblock %}

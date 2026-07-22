@@ -9,9 +9,10 @@ changes) — the same battle-tested mechanism as Django admin resets.
 
 from django.conf import settings
 from django.contrib.auth.tokens import PasswordResetTokenGenerator, default_token_generator
-from django.core.mail import send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+
+from core.emails import send_templated_email
 
 
 class EmailVerificationTokenGenerator(PasswordResetTokenGenerator):
@@ -51,16 +52,16 @@ def send_verification_email(user) -> None:
     # already; if this starts 404ing again, re-check with the frontend team
     # before assuming the backend link format is wrong.
     link = f"{settings.FRONTEND_URL}/auth/verify?uid={encode_uid(user)}&token={token}"
-    send_mail(
+    send_templated_email(
         subject="Verify your Kenya News Agency Archive account",
-        message=(
+        template_name="verify_email.html",
+        context={"first_name": user.first_name, "verify_url": link},
+        recipient_list=[user.email],
+        text_body=(
             f"Hello {user.first_name},\n\n"
             f"Welcome to the KNA Digital Archive. Please verify your email:\n\n{link}\n\n"
             "If you did not create this account, you can ignore this email."
         ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
     )
 
 
@@ -69,14 +70,14 @@ def send_password_reset_email(user) -> None:
     # Path must match the frontend's actual route (/auth/reset, confirmed
     # live) — NOT /reset-password, which 404s.
     link = f"{settings.FRONTEND_URL}/auth/reset?uid={encode_uid(user)}&token={token}"
-    send_mail(
+    send_templated_email(
         subject="Reset your password",
-        message=(
+        template_name="password_reset.html",
+        context={"first_name": user.first_name, "reset_url": link},
+        recipient_list=[user.email],
+        text_body=(
             f"Hello {user.first_name},\n\n"
             f"We received a request to reset your password:\n\n{link}\n\n"
             "This link expires shortly. If you did not request this, ignore this email."
         ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
     )

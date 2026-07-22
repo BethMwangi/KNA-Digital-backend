@@ -1,0 +1,15 @@
+{% extends "emails/base_email.html" %}
+{% block subject %}Payment unsuccessful — order {{ order_number }}{% endblock %}
+{% block preheader %}Your payment didn't go through — no charge was made. You can try again anytime.{% endblock %}
+{% block headline %}Payment unsuccessful{% endblock %}
+{% block body %}
+<p style="margin:0 0 16px 0;">Hello {{ first_name }},</p>
+<p style="margin:0 0 16px 0;">Your payment for order <strong>{{ order_number }}</strong> (KES {{ total }}) did not go through.</p>
+<p style="margin:0;">No charge was made. You can try again from your cart whenever you're ready.</p>
+{% endblock %}
+{% block cta %}
+{% include "emails/_button.html" with url=checkout_url label="Try again" %}
+{% endblock %}
+{% block footer_note %}
+If this keeps happening, reply to this email and we'll help you sort it out.
+{% endblock %}
