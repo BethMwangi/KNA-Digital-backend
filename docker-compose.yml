@@ -39,10 +39,11 @@ services:
       MEILI_NO_ANALYTICS: "true"
     ports: ["7700:7700"]  # dashboard: http://localhost:7700
     volumes: [meilidata:/meili_data]
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7700/health"]
-      interval: 5s
-      retries: 5
+    # No healthcheck: this image doesn't ship wget/curl, so a CMD-based
+    # check just reports false-unhealthy forever. Not load-bearing anyway
+    # — search falls back to Postgres automatically if this is down, so
+    # nothing should hard-block startup waiting on it (see depends_on
+    # below: service_started, not service_healthy).
 
   backend:
     build: .
@@ -66,7 +67,7 @@ services:
       redis:
         condition: service_healthy
       meilisearch:
-        condition: service_healthy
+        condition: service_started
 
   worker:
     build: .

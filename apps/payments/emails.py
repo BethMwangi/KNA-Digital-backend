@@ -29,7 +29,7 @@ def send_payment_success_email(order) -> None:
         "",
         f"Your downloads are ready in your account: {downloads_url}",
         "",
-        "Thank you for supporting the Kenya News Agency Digital Archive.",
+        "Thank you for supporting the Urithi Digital Archive.",
     ]
 
     send_templated_email(
