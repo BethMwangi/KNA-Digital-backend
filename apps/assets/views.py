@@ -136,7 +136,16 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
         return DigitalAssetListSerializer
 
     def get_permissions(self):
-        if self.action in ["list", "retrieve", "featured", "latest", "search", "suggest"]:
+        if self.action in [
+            "list",
+            "retrieve",
+            "featured",
+            "latest",
+            "search",
+            "suggest",
+            "counties",
+            "photographers",
+        ]:
             return [permissions.AllowAny()]
         # create, update, partial_update, destroy, publish, archive → editor+
         return [permissions.IsAuthenticated(), IsContentEditorOrAbove()]
@@ -191,17 +200,63 @@ class DigitalAssetViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(latest_assets, many=True)
         return api_response(message="Latest assets retrieved.", data=serializer.data)
 
+    @action(detail=False, methods=["get"])
+    @vary_auth
+    @cache_public
+    def counties(self, request):
+        """GET /api/v1/assets/counties/ — every county actually present in
+        the catalogue, with a live count, for a dynamic filter sidebar
+        (replaces a hardcoded county list on the frontend). Pass ?county=
+        straight through to /search/ or /assets/ — same param name."""
+        rows = (
+            self.get_queryset()
+            .exclude(metadata__county="")
+            .values("metadata__county")
+            .annotate(count=Count("id"))
+            .order_by("-count", "metadata__county")
+        )
+        data = [{"name": r["metadata__county"], "count": r["count"]} for r in rows]
+        return api_response(message="Counties retrieved.", data=data)
+
+    @action(detail=False, methods=["get"])
+    @vary_auth
+    @cache_public
+    def photographers(self, request):
+        """GET /api/v1/assets/photographers/ — same idea, for photographer."""
+        rows = (
+            self.get_queryset()
+            .exclude(photographer="")
+            .values("photographer")
+            .annotate(count=Count("id"))
+            .order_by("-count", "photographer")
+        )
+        data = [{"name": r["photographer"], "count": r["count"]} for r in rows]
+        return api_response(message="Photographers retrieved.", data=data)
+
     def _meili_filters(self, request):
         """Pull the same filter params DigitalAssetFilter understands,
-        for the Meilisearch path (which doesn't use django-filter)."""
+        for the Meilisearch path (which doesn't use django-filter).
+        Comma-separated values become lists — meilisearch_client.search()
+        turns a list into an OR'd `IN [...]` clause, matching how
+        CharInFilter handles the same wire format on the Postgres side."""
         params = request.query_params
+
+        def csv(name):
+            raw = params.get(name)
+            if not raw:
+                return None
+            values = [v.strip() for v in raw.split(",") if v.strip()]
+            return values or None
+
         return {
-            "category_id": params.get("category") or None,
-            "collection_id": params.get("collection") or None,
-            "asset_type": params.get("asset_type") or None,
+            "category_id": csv("category"),
+            "collection_id": csv("collection"),
+            "asset_type": csv("asset_type"),
             "year": params.get("year") or None,
             "date_from": parse_date(params.get("date_from") or ""),
             "date_to": parse_date(params.get("date_to") or ""),
+            "county": csv("county"),
+            "photographer": csv("photographer"),
         }
 
     def _meili_paginated_response(self, request, query, ids, total):

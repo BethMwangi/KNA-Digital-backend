@@ -1,0 +1,14 @@
+{% extends "emails/base_email.html" %}
+{% block subject %}Verify your KNA Digital Archive account{% endblock %}
+{% block preheader %}Confirm your email to start browsing and downloading from the archive.{% endblock %}
+{% block headline %}Welcome, {{ first_name }}{% endblock %}
+{% block body %}
+<p style="margin:0 0 16px 0;">Thank you for creating an account with the Kenya News Agency Digital Archive.</p>
+<p style="margin:0;">Please confirm your email address to activate your account and start browsing, purchasing, and downloading archive material.</p>
+{% endblock %}
+{% block cta %}
+{% include "emails/_button.html" with url=verify_url label="Verify my email" %}
+{% endblock %}
+{% block footer_note %}
+If you did not create this account, you can safely ignore this email — no account will be activated.
+{% endblock %}

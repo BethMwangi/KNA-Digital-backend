@@ -216,6 +216,29 @@ def reindex_all() -> int:
     return len(docs)
 
 
+def _escape(value: str) -> str:
+    """Meilisearch filter strings use double-quoted values; escape any
+    embedded quote so a value can never break out of its filter clause."""
+    return str(value).replace('"', '\\"')
+
+
+def _eq_or_in(field: str, value) -> str | None:
+    """value may be a single string or a list (multi-select). A list
+    becomes a Meilisearch `field IN [...]` clause (OR semantics across
+    the values); every other filter still ANDs against this one."""
+    if value is None or value == "" or value == []:
+        return None
+    if isinstance(value, (list, tuple)):
+        values = [v for v in value if v]
+        if not values:
+            return None
+        if len(values) == 1:
+            return f'{field} = "{_escape(values[0])}"'
+        quoted = ", ".join(f'"{_escape(v)}"' for v in values)
+        return f"{field} IN [{quoted}]"
+    return f'{field} = "{_escape(value)}"'
+
+
 def search(
     query: str,
     *,
@@ -225,24 +248,35 @@ def search(
     date_from=None,
     date_to=None,
     year=None,
+    county=None,
+    photographer=None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[str], int] | None:
     """Returns (ordered list of matching asset id strings, total estimated
     hits) or None if Meilisearch isn't usable right now (caller should
     fall back to Postgres). Filtering happens server-side in Meilisearch;
-    the caller re-fetches full rows from Postgres by these ids."""
+    the caller re-fetches full rows from Postgres by these ids.
+
+    category_id/collection_id/asset_type/county/photographer each accept
+    either a single value or a list — a list means OR ("Kiambu or
+    Nairobi"); every filter argument still ANDs against every other one
+    ("(Kiambu or Nairobi) AND year 1979")."""
     index = _index()
     if index is None:
         return None
 
-    filters = []
-    if category_id:
-        filters.append(f'category_id = "{category_id}"')
-    if collection_id:
-        filters.append(f'collection_id = "{collection_id}"')
-    if asset_type:
-        filters.append(f'asset_type = "{asset_type}"')
+    filters = [
+        c
+        for c in (
+            _eq_or_in("category_id", category_id),
+            _eq_or_in("collection_id", collection_id),
+            _eq_or_in("asset_type", asset_type),
+            _eq_or_in("county", county),
+            _eq_or_in("photographer", photographer),
+        )
+        if c
+    ]
     if year:
         filters.append(f"year = {int(year)}")
     if date_from:
