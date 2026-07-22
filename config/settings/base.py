@@ -139,7 +139,7 @@ SIMPLE_JWT = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "KNA Enterprise Digital Archive Commerce Platform API",
+    "TITLE": "Urithi Enterprise Digital Archive Commerce Platform API",
     "DESCRIPTION": "Phase One — public eCommerce platform for licensed multimedia assets.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
