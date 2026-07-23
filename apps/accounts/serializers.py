@@ -1,6 +1,7 @@
 """Accounts serializers — validation lives here, views stay thin."""
 
 from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -149,8 +150,26 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 
 class EmailVerifySerializer(serializers.Serializer):
-    uid = serializers.CharField()
-    token = serializers.CharField()
+    email = serializers.EmailField()
+    code = serializers.CharField()
+
+    def validate(self, attrs):
+        user = User.objects.filter(email__iexact=attrs["email"]).first()
+        valid = (
+            user is not None
+            and user.email_verification_code
+            and user.email_verification_code == attrs["code"]
+            and user.email_verification_code_expires_at is not None
+            and user.email_verification_code_expires_at > timezone.now()
+        )
+        if not valid:
+            raise serializers.ValidationError({"code": "Invalid or expired verification code."})
+        attrs["user"] = user
+        return attrs
+
+
+class ResendVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField()
 
 
 class AdminUserSerializer(serializers.ModelSerializer):

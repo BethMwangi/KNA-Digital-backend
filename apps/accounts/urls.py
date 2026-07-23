@@ -16,6 +16,11 @@ auth_patterns = [
     path("forgot-password", views.PasswordResetRequestView.as_view(), name="auth-forgot-password"),
     path("reset-password", views.PasswordResetConfirmView.as_view(), name="auth-reset-password"),
     path("verify-email", views.EmailVerifyView.as_view(), name="auth-verify-email"),
+    path(
+        "resend-verification",
+        views.ResendVerificationView.as_view(),
+        name="auth-resend-verification",
+    ),
 ]
 
 user_patterns = [

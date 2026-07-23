@@ -1,13 +1,20 @@
 {% extends "emails/base_email.html" %}
-{% block subject %}Verify your KNA Digital Archive account{% endblock %}
+{% block subject %}Verify your Urithi Digital Archive account{% endblock %}
 {% block preheader %}Confirm your email to start browsing and downloading from the archive.{% endblock %}
 {% block headline %}Welcome, {{ first_name }}{% endblock %}
 {% block body %}
-<p style="margin:0 0 16px 0;">Thank you for creating an account with  Urithi Agency Digital Archive.</p>
-<p style="margin:0;">Please confirm your email address to activate your account and start browsing, purchasing, and downloading archive material.</p>
+<p style="margin:0 0 16px 0;">Thank you for creating an account with Urithi Digital Archive.</p>
+<p style="margin:0;">Enter this code to confirm your email address and activate your account:</p>
 {% endblock %}
 {% block cta %}
-{% include "emails/_button.html" with url=verify_url label="Verify my email" %}
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 4px 0;">
+  <tr>
+    <td style="background-color:#F4EFE3;border:1px solid #DDD3B8;padding:16px 28px;">
+      <span style="font-family:Georgia,'Times New Roman',serif;font-size:30px;letter-spacing:8px;color:#17150F;">{{ code }}</span>
+    </td>
+  </tr>
+</table>
+<p style="margin:12px 0 0 0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:13px;color:#8A8371;">This code expires in 30 minutes.</p>
 {% endblock %}
 {% block footer_note %}
 If you did not create this account, you can safely ignore this email — no account will be activated.

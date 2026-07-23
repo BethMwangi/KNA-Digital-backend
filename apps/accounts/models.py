@@ -79,6 +79,12 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
         db_index=True,
     )
     email_verified = models.BooleanField(_("email verified"), default=False)
+    email_verification_code = models.CharField(
+        _("email verification code"), max_length=6, blank=True
+    )
+    email_verification_code_expires_at = models.DateTimeField(
+        _("email verification code expires at"), null=True, blank=True
+    )
     is_staff = models.BooleanField(
         _("staff status"),
         default=False,
@@ -135,7 +141,16 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
     def mark_email_verified(self):
         if not self.email_verified:
             self.email_verified = True
-            self.save(update_fields=["email_verified", "updated_at"])
+            self.email_verification_code = ""
+            self.email_verification_code_expires_at = None
+            self.save(
+                update_fields=[
+                    "email_verified",
+                    "email_verification_code",
+                    "email_verification_code_expires_at",
+                    "updated_at",
+                ]
+            )
 
 
 class AuditLog(BaseModel):

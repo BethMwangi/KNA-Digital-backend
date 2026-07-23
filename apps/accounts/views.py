@@ -31,10 +31,10 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     RegisterSerializer,
+    ResendVerificationSerializer,
     UserSerializer,
 )
 from .tasks import send_password_reset_email_task, send_verification_email_task
-from .tokens import decode_uid, email_verification_token
 
 
 def api_response(
@@ -223,21 +223,13 @@ class EmailVerifyView(APIView):
 
     @extend_schema(
         summary="Verify an email address",
-        description="Confirms the uid+token from the verification email link.",
+        description="Confirms the 6-digit code sent to the user's email.",
         request=EmailVerifySerializer,
     )
     def post(self, request):
         serializer = EmailVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = decode_uid(serializer.validated_data["uid"])
-        if user is None or not email_verification_token.check_token(
-            user, serializer.validated_data["token"]
-        ):
-            return api_response(
-                success=False,
-                message="Invalid or expired verification link.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
+        user = serializer.validated_data["user"]
         user.mark_email_verified()
         log_event(
             user=user,
@@ -245,6 +237,31 @@ class EmailVerifyView(APIView):
             request=request,
         )
         return api_response(message="Email verified successfully.")
+
+
+# --------------------------------------------------------------------- #
+# POST /api/v1/auth/resend-verification
+# --------------------------------------------------------------------- #
+class ResendVerificationView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [AuthThrottle]
+
+    @extend_schema(
+        summary="Resend the verification code",
+        description="Sends a fresh 6-digit code, invalidating any previous one. "
+        "Always returns the same message, to avoid revealing whether an "
+        "account exists.",
+        request=ResendVerificationSerializer,
+    )
+    def post(self, request):
+        serializer = ResendVerificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = User.objects.filter(email__iexact=serializer.validated_data["email"]).first()
+        if user and not user.email_verified:
+            send_verification_email_task.delay(str(user.id))
+        return api_response(
+            message="If that email is registered and unverified, a new code has been sent."
+        )
 
 
 # --------------------------------------------------------------------- #
