@@ -44,15 +44,12 @@ def decode_uid(uidb64: str):
 
 
 # --------------------------------------------------------------------- #
-# Transactional emails (SDD §21). Called from apps/accounts/tasks.py,
+# Transactional emails  Called from apps/accounts/tasks.py,
 # off the request path — see that module for why. Swap EMAIL_BACKEND via
 # env var (console / Resend / SMTP) — no code changes needed here.
 # --------------------------------------------------------------------- #
 def send_verification_email(user) -> None:
-    # Code-based, not a link: a magic link ties every already-sent email
-    # to whatever the frontend's deployed URL happens to be *right now*,
-    # and breaks the moment that changes. A code just needs the user to
-    # be on the frontend already (they are — they're signing up) and
+    # Code-based,
     # type 6 digits in; nothing about it can go stale.
     code = generate_verification_code()
     user.email_verification_code = code
