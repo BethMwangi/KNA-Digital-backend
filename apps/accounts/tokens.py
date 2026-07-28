@@ -49,8 +49,6 @@ def decode_uid(uidb64: str):
 # env var (console / Resend / SMTP) — no code changes needed here.
 # --------------------------------------------------------------------- #
 def send_verification_email(user) -> None:
-    # Code-based,
-    # type 6 digits in; nothing about it can go stale.
     code = generate_verification_code()
     user.email_verification_code = code
     user.email_verification_code_expires_at = timezone.now() + VERIFICATION_CODE_TTL
@@ -71,8 +69,6 @@ def send_verification_email(user) -> None:
 
 def send_password_reset_email(user) -> None:
     token = password_reset_token.make_token(user)
-    # Path must match the frontend's actual route (/auth/reset, confirmed
-    # live) — NOT /reset-password, which 404s.
     link = f"{settings.FRONTEND_URL}/auth/reset?uid={encode_uid(user)}&token={token}"
     send_templated_email(
         subject="Reset your password",
