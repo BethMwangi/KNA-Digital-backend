@@ -5,6 +5,11 @@ Customers can list their purchased downloads and generate secure
 signed URLs to fetch the high-resolution files.
 """
 
+from django.conf import settings
+from django.core.files.storage import storages
+from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
+from django.http import FileResponse, Http404, HttpResponse
+from django.views import View
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, permissions, serializers, status
 from rest_framework.response import Response
@@ -12,7 +17,7 @@ from rest_framework.response import Response
 from apps.accounts.permissions import IsAccountActive
 from apps.assets.models import AssetVariant
 
-from .models import Download
+from .models import DOWNLOAD_TOKEN_MAX_AGE, DOWNLOAD_TOKEN_SALT, Download
 from .serializers import DownloadSerializer
 
 
@@ -115,4 +120,46 @@ class DownloadLinkView(generics.GenericAPIView):
                 "file_size": variant.file_size,
                 "downloads_remaining": download.downloads_remaining,
             },
+        )
+
+
+class SecureMediaDownloadView(View):
+    """
+    GET /api/v1/secure-media/<token>/ — serves a private (paid) file
+    given a signed token from Download.generate_signed_url(). Only used
+    when "private_media" is local-disk storage (no native presigned-URL
+    support) — see that method for why.
+
+    No further auth/entitlement check happens here: possession of a
+    valid, unexpired token *is* the authorization, exactly like an S3
+    presigned URL. Entitlement was already checked once, in
+    DownloadLinkView, at the moment the token was issued.
+    """
+
+    def get(self, request, token):
+        try:
+            variant_id = TimestampSigner(salt=DOWNLOAD_TOKEN_SALT).unsign(
+                token, max_age=DOWNLOAD_TOKEN_MAX_AGE
+            )
+        except (BadSignature, SignatureExpired) as exc:
+            raise Http404("Invalid or expired download link.") from exc
+
+        variant = AssetVariant.objects.filter(id=variant_id).first()
+        if variant is None:
+            raise Http404("File not found.")
+
+        storage = storages["private_media"]
+        if not storage.exists(variant.storage_path):
+            raise Http404("File not found.")
+
+        if getattr(settings, "MEDIA_SERVE_VIA_NGINX", False):
+            # Hand the actual byte transfer off to nginx — Python never
+            # touches the file contents. nginx must have a matching
+            # `internal` location for /internal/private-media/.
+            response = HttpResponse(content_type=variant.mime_type)
+            response["X-Accel-Redirect"] = f"/internal/private-media/{variant.storage_path}"
+            return response
+
+        return FileResponse(
+            storage.open(variant.storage_path, "rb"), content_type=variant.mime_type
         )

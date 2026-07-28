@@ -7,4 +7,9 @@ from . import views
 urlpatterns = [
     path("downloads/", views.DownloadListView.as_view(), name="download-list"),
     path("downloads/<uuid:pk>/link/", views.DownloadLinkView.as_view(), name="download-link"),
+    path(
+        "secure-media/<str:token>/",
+        views.SecureMediaDownloadView.as_view(),
+        name="secure-media-download",
+    ),
 ]

@@ -58,7 +58,7 @@ class UserAdmin(DjangoUserAdmin):
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
-    """Immutable — read-only in admin (SDD §20.3)."""
+    """Immutable — read-only in admin"""
 
     list_display = ["created_at", "action", "user", "ip_address", "success"]
     list_filter = ["action", "success"]

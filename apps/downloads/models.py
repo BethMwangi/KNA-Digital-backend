@@ -7,12 +7,18 @@ request a secure, time-limited signed URL to fetch the high-res file.
 
 from django.conf import settings
 from django.core.files.storage import storages
+from django.core.signing import TimestampSigner
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.assets.models import AssetVariant, DigitalAsset
 from apps.commerce.models import License, Order
 from core.models import BaseModel
+
+# Shared with apps.downloads.views.SecureMediaDownloadView, which unsigns
+# these tokens — salt and max-age must match on both sides.
+DOWNLOAD_TOKEN_SALT = "secure-media-download"
+DOWNLOAD_TOKEN_MAX_AGE = 3600
 
 
 class Download(BaseModel):
@@ -66,14 +72,18 @@ class Download(BaseModel):
     def generate_signed_url(self, variant: AssetVariant, expires_in: int = 3600) -> str:
         """
         Time-limited signed URL for the purchased file, via the
-        "private_media" storage alias — a real presigned Supabase/S3 URL in
-        production, a plain local-disk URL in dev (see core/storage.py vs
-        core/storage_s3.py — only the S3 backend supports `expire`).
+        "private_media" storage alias — a real presigned S3 URL when
+        backed by S3-compatible storage. Local-disk storage has no
+        native presigned-URL equivalent, so we issue our own signed,
+        expiring token instead (see SecureMediaDownloadView) — without
+        this, the URL would be permanent and unauthenticated once
+        issued, defeating the whole point of gating a paid download.
         """
         storage = storages["private_media"]
         if hasattr(storage, "querystring_expire"):
             return storage.url(variant.storage_path, expire=expires_in)
-        return storage.url(variant.storage_path)
+        token = TimestampSigner(salt=DOWNLOAD_TOKEN_SALT).sign(str(variant.id))
+        return f"{settings.BACKEND_URL}/api/v1/secure-media/{token}/"
 
     def record_download(self):
         """Increment the download counter."""

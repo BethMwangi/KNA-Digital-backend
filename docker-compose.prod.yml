@@ -1,0 +1,81 @@
+# Production stack — urithi.go.ke.
+#
+# Differs from docker-compose.yml (local dev) in every way that matters
+# for running on a real server:
+#   - no `db` service: Postgres runs natively on the host (see deploy
+#     notes), reached via the docker0 bridge gateway (172.17.0.1)
+#   - no live source-code volume mount: the image is built once and run
+#     as-is, matching exactly what was tested
+#   - gunicorn (via the Dockerfile's default CMD), not `runserver`
+#   - real credentials everywhere (from .env / .env.rabbitmq), no
+#     guest/guest or dev-only-insecure-key defaults
+#   - backend only binds to 127.0.0.1:8000 — nginx is the only thing
+#     that talks to it directly; nothing is reachable from the public
+#     internet except through nginx on 80/443
+#   - a persistent media volume, since files now live on this host's
+#     disk instead of Supabase Storage (see core/storage.py)
+services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: urithi
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    volumes: [rabbitmqdata:/var/lib/rabbitmq]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes: [redisdata:/data]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.10
+    environment:
+      MEILI_MASTER_KEY: ${MEILISEARCH_MASTER_KEY}
+      MEILI_ENV: production
+      MEILI_NO_ANALYTICS: "true"
+    volumes: [meilidata:/meili_data]
+    restart: unless-stopped
+
+  backend:
+    build: .
+    env_file: .env
+    volumes:
+      - media_data:/app/media
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: celery -A config worker -l info --concurrency 2
+    env_file: .env
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  rabbitmqdata:
+  redisdata:
+  meilidata:
+  media_data:
