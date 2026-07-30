@@ -6,11 +6,15 @@ see gateways.py note in models.py. Until then, provider="mock" gives a
 full working simulation: initiate -> simulate -> order paid -> downloads
 granted -> confirmation email, so the whole storefront can be built and
 tested end-to-end before a real gateway is plugged in.
+
+Pesaflow is the first real provider: initiate -> redirect to hosted
+checkout -> IPN callback -> order paid -> downloads granted.
 """
 
 import logging
 import uuid
 
+from django.conf import settings
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 
@@ -84,19 +88,65 @@ class PaymentInitiateView(generics.CreateAPIView):
         )
 
         data = PaymentSerializer(payment).data
-        if provider == Payment.Provider.MOCK:
+
+        if provider == Payment.Provider.PESAFLOW:
+            data = self._initiate_pesaflow(payment, serializer.validated_data, data)
+        elif provider == Payment.Provider.MOCK:
             # No real gateway to redirect to — the frontend calls this
             # next to stand in for "customer completes the hosted
             # payment page and the gateway calls us back".
             data["simulate_url"] = f"/api/v1/payments/{payment.id}/simulate/"
-        # TODO: for real providers, call the gateway adapter here and
-        # return whatever redirect/STK-push info it gives (see gateways.py).
+        # TODO: for other real providers, call the gateway adapter here.
 
         return api_response(
             message="Payment initiated.",
             data=data,
             status_code=status.HTTP_201_CREATED,
         )
+
+    def _initiate_pesaflow(self, payment, validated_data, response_data):
+        """Call Pesaflow's API to create an invoice and get a checkout URL."""
+        from .gateways.pesaflow import PesaflowError, PesaflowGateway
+
+        billing = validated_data["billing"]
+        frontend_url = settings.FRONTEND_URL.rstrip("/")
+        backend_url = settings.BACKEND_URL.rstrip("/")
+
+        gw = PesaflowGateway()
+        try:
+            checkout_url = gw.create_invoice(
+                payment=payment,
+                first_name=billing["first_name"],
+                last_name=billing["last_name"],
+                email=billing["email"],
+                phone=billing["phone"],
+                callback_url=f"{backend_url}/api/v1/payments/pesaflow/ipn/",
+                success_redirect_url=(
+                    f"{frontend_url}/checkout"
+                    f"?payment=success&order={payment.order.order_number}"
+                ),
+                fail_redirect_url=(
+                    f"{frontend_url}/checkout" f"?payment=failed&order={payment.order.order_number}"
+                ),
+            )
+        except PesaflowError as exc:
+            logger.error("PESAFLOW initiate failed payment=%s: %s", payment.id, exc)
+            # Mark the payment as failed so the user can retry
+            payment.status = Payment.Status.FAILED
+            payment.provider_response = {"error": str(exc)}
+            payment.save(update_fields=["status", "provider_response", "updated_at"])
+            response_data["status"] = Payment.Status.FAILED
+            response_data["error"] = str(exc)
+            return response_data
+
+        # Store the checkout URL on the payment for reference
+        payment.checkout_url = checkout_url
+        payment.status = Payment.Status.PENDING
+        payment.save(update_fields=["checkout_url", "status", "updated_at"])
+
+        response_data["checkout_url"] = checkout_url
+        response_data["status"] = Payment.Status.PENDING
+        return response_data
 
 
 class PaymentSimulateView(generics.GenericAPIView):
@@ -218,6 +268,78 @@ class PaymentCallbackView(generics.GenericAPIView):
             payment = fail_payment(payment, provider_response=provider_response)
 
         return api_response(message=f"Payment {payment.status}.")
+
+
+class PesaflowIPNView(generics.GenericAPIView):
+    """
+    POST /api/v1/payments/pesaflow/ipn/ — Pesaflow IPN callback.
+
+    Pesaflow sends payment notifications to this endpoint after a customer
+    completes (or abandons) checkout. The payload is verified via HMAC
+    signature before any state is mutated.
+
+    This endpoint is unauthenticated (Pesaflow's servers call it) and
+    must always return 200 OK — Pesaflow retries on non-200 responses.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        from .gateways.pesaflow import PesaflowGateway
+
+        payload = request.data if isinstance(request.data, dict) else {}
+
+        logger.info("PESAFLOW IPN received: %s", payload)
+
+        gw = PesaflowGateway()
+
+        # Verify signature if present
+        signature = payload.get("secure_hash", "")
+        if signature and not gw.verify_ipn_signature(payload, signature):
+            logger.warning("PESAFLOW IPN signature mismatch — payload: %s", payload)
+            # Return 200 anyway to prevent Pesaflow from retrying with a
+            # potentially tampered payload.
+            return api_response(
+                success=False,
+                message="Invalid signature.",
+                status_code=status.HTTP_200_OK,
+            )
+
+        result = gw.parse_ipn(payload)
+
+        if not result.transaction_id:
+            logger.warning("PESAFLOW IPN missing transaction_id: %s", payload)
+            return api_response(
+                success=False,
+                message="Missing transaction reference.",
+                status_code=status.HTTP_200_OK,
+            )
+
+        try:
+            payment = Payment.objects.select_related("order", "order__user").get(
+                transaction_id=result.transaction_id
+            )
+        except Payment.DoesNotExist:
+            logger.warning("PESAFLOW IPN unknown transaction_id=%s", result.transaction_id)
+            return api_response(
+                success=False,
+                message="Transaction not found.",
+                status_code=status.HTTP_200_OK,
+            )
+
+        logger.info(
+            "PESAFLOW IPN payment=%s order=%s status=%s",
+            payment.id,
+            payment.order.order_number,
+            result.status,
+        )
+
+        if result.status == "completed":
+            complete_payment(payment, provider_response=result.provider_response)
+        else:
+            fail_payment(payment, provider_response=result.provider_response)
+
+        return api_response(message="IPN processed.")
 
 
 class PaymentListView(generics.ListAPIView):

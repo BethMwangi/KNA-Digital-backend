@@ -19,6 +19,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "amount",
             "currency",
             "transaction_id",
+            "checkout_url",
             "paid_at",
             "created_at",
             "updated_at",
@@ -27,10 +28,20 @@ class PaymentSerializer(serializers.ModelSerializer):
             "id",
             "status",
             "transaction_id",
+            "checkout_url",
             "paid_at",
             "created_at",
             "updated_at",
         ]
+
+
+class BillingDetailsSerializer(serializers.Serializer):
+    """Billing info forwarded to the payment gateway."""
+
+    first_name = serializers.CharField(max_length=100)
+    last_name = serializers.CharField(max_length=100)
+    email = serializers.EmailField()
+    phone = serializers.CharField(max_length=30)
 
 
 class InitiatePaymentSerializer(serializers.Serializer):
@@ -38,6 +49,7 @@ class InitiatePaymentSerializer(serializers.Serializer):
 
     order_id = serializers.UUIDField()
     provider = serializers.ChoiceField(choices=Payment.Provider.choices)
+    billing = BillingDetailsSerializer(required=False)
 
     def validate_order_id(self, value):
         from apps.commerce.models import Order
@@ -49,6 +61,14 @@ class InitiatePaymentSerializer(serializers.Serializer):
                 "Order not found or is not in pending status."
             ) from err
         return value
+
+    def validate(self, attrs):
+        # Pesaflow requires billing details — enforce at serializer level.
+        if attrs["provider"] == Payment.Provider.PESAFLOW and not attrs.get("billing"):
+            raise serializers.ValidationError(
+                {"billing": "Billing details are required for Pesaflow payments."}
+            )
+        return attrs
 
 
 class PaymentCallbackSerializer(serializers.Serializer):

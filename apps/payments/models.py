@@ -17,6 +17,7 @@ class Payment(BaseModel):
     """Tracks a single payment attempt for an order."""
 
     class Provider(models.TextChoices):
+        PESAFLOW = "pesaflow", _("Pesaflow")
         MPESA = "mpesa", _("M-Pesa")
         ECITIZEN = "ecitizen", _("eCitizen")
         VISA = "visa", _("Visa")
@@ -58,6 +59,11 @@ class Payment(BaseModel):
         default=dict,
         blank=True,
         help_text=_("Raw response from the payment gateway for debugging."),
+    )
+    checkout_url = models.URLField(
+        max_length=500,
+        blank=True,
+        help_text=_("Hosted checkout URL from the payment provider (e.g. Pesaflow iframe)."),
     )
     paid_at = models.DateTimeField(null=True, blank=True)
 

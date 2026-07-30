@@ -266,3 +266,14 @@ API_CACHE_TTL = env.int("API_CACHE_TTL", default=900)  # seconds; public reads
 MEILISEARCH_URL = env("MEILISEARCH_URL", default="")
 MEILISEARCH_MASTER_KEY = env("MEILISEARCH_MASTER_KEY", default="")
 MEILISEARCH_INDEX = env("MEILISEARCH_INDEX", default="assets")
+
+# ------------------------------------------------------------------ #
+# Pesaflow — hosted checkout (iframe v2.1) for M-Pesa, cards, bank.
+# Test credentials go in .env (gitignored); production credentials go
+# in the deployment environment only.
+# ------------------------------------------------------------------ #
+PESAFLOW_SERVICE_ID = env("PESAFLOW_SERVICE_ID", default="")
+PESAFLOW_KEY = env("PESAFLOW_KEY", default="")
+PESAFLOW_SECRET = env("PESAFLOW_SECRET", default="")
+PESAFLOW_API_CLIENT_ID = env("PESAFLOW_API_CLIENT_ID", default="")
+PESAFLOW_BASE_URL = env("PESAFLOW_BASE_URL", default="https://test.pesaflow.com")
