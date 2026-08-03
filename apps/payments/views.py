@@ -120,6 +120,7 @@ class PaymentInitiateView(generics.CreateAPIView):
                 last_name=billing["last_name"],
                 email=billing["email"],
                 phone=billing["phone"],
+                id_number=billing["id_number"],
                 callback_url=f"{backend_url}/api/v1/payments/pesaflow/ipn/",
                 success_redirect_url=(
                     f"{frontend_url}/checkout"
@@ -293,8 +294,10 @@ class PesaflowIPNView(generics.GenericAPIView):
 
         gw = PesaflowGateway()
 
-        # Verify signature if present
-        signature = payload.get("secure_hash", "")
+        # Verify signature if present. Pesaflow's IPN payload carries this
+        # as "token_hash" (see PesaflowGateway.verify_ipn_signature for
+        # why we can't do a real HMAC check against it yet).
+        signature = payload.get("token_hash", "")
         if signature and not gw.verify_ipn_signature(payload, signature):
             logger.warning("PESAFLOW IPN signature mismatch — payload: %s", payload)
             # Return 200 anyway to prevent Pesaflow from retrying with a

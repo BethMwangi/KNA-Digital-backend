@@ -42,6 +42,10 @@ class BillingDetailsSerializer(serializers.Serializer):
     last_name = serializers.CharField(max_length=100)
     email = serializers.EmailField()
     phone = serializers.CharField(max_length=30)
+    # Pesaflow's iframe API requires clientIDNumber (national ID/passport) —
+    # not previously collected. Only actually required when provider is
+    # pesaflow; enforced in InitiatePaymentSerializer.validate() below.
+    id_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
 
 
 class InitiatePaymentSerializer(serializers.Serializer):
@@ -63,11 +67,23 @@ class InitiatePaymentSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        # Pesaflow requires billing details — enforce at serializer level.
-        if attrs["provider"] == Payment.Provider.PESAFLOW and not attrs.get("billing"):
-            raise serializers.ValidationError(
-                {"billing": "Billing details are required for Pesaflow payments."}
-            )
+        # Pesaflow requires billing details, including an ID/passport
+        # number (clientIDNumber) — enforce at serializer level so a
+        # missing field is a clean 400, not a confusing gateway error.
+        if attrs["provider"] == Payment.Provider.PESAFLOW:
+            billing = attrs.get("billing")
+            if not billing:
+                raise serializers.ValidationError(
+                    {"billing": "Billing details are required for Pesaflow payments."}
+                )
+            if not billing.get("id_number"):
+                raise serializers.ValidationError(
+                    {
+                        "billing": {
+                            "id_number": "ID or passport number is required for Pesaflow payments."
+                        }
+                    }
+                )
         return attrs
 
 
