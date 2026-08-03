@@ -12,6 +12,7 @@ Usage:
     status, txn_id, raw = gw.parse_ipn(payload)
 """
 
+import base64
 import hashlib
 import hmac
 import logging
@@ -60,38 +61,58 @@ class PesaflowGateway:
         last_name: str,
         email: str,
         phone: str,
+        id_number: str,
         callback_url: str,
         success_redirect_url: str,
-        fail_redirect_url: str,
+        fail_redirect_url: str,  # noqa: ARG002 — no fail-redirect field in Pesaflow's iframe API
     ) -> str:
         """Create a Pesaflow invoice and return the checkout URL.
 
         Raises ``PesaflowError`` on any non-success response so the caller
         can surface a user-friendly message.
         """
+        client_name = f"{first_name} {last_name}"
+        amount_expected = str(payment.amount)
+        bill_ref_number = payment.transaction_id
+        bill_desc = f"Order {payment.order.order_number}"
+
+        # Field names below must match Pesaflow's documented iframe API
+        # exactly (apiClientID, serviceID, clientMSISDN, ... — not our
+        # own naming convention). A near-miss here gets silently
+        # rejected with a generic "invalid params" error, not a helpful
+        # one, so this has to be exact.
         payload = {
-            "s": self.service_id,
-            "api_client_id": self.api_client_id,
-            "key": self.key,
-            "amount": str(payment.amount),
+            "apiClientID": self.api_client_id,
+            "serviceID": self.service_id,
+            "billDesc": bill_desc,
             "currency": payment.currency,
-            "first_name": first_name,
-            "last_name": last_name,
-            "email": email,
-            "phone_number": phone,
-            "bill_desc": f"Order {payment.order.order_number}",
-            "bill_ref_number": payment.transaction_id,
-            "cust_name": f"{first_name} {last_name}",
-            "notification_url": callback_url,
-            "call_back_url_onSuccess": success_redirect_url,
-            "call_back_url_onFail": fail_redirect_url,
+            "billRefNumber": bill_ref_number,
+            "clientMSISDN": phone,
+            "clientName": client_name,
+            "clientIDNumber": id_number,
+            "clientEmail": email,
+            "callBackURLONSuccess": success_redirect_url,
+            "amountExpected": amount_expected,
+            "notificationURL": callback_url,
             "format": "json",
         }
 
-        # Generate the secure hash: HMAC-SHA256 of the concatenated values
-        # sorted by key, using the Pesaflow secret.
-        secure_hash = self._generate_secure_hash(payload)
-        payload["secure_hash"] = secure_hash
+        # Secure hash: HMAC-SHA256 over these exact values in this exact
+        # order (per Pesaflow's docs), hex-digested, THEN base64-encoded
+        # — their PHP/C# sample code both hex-encode first and base64
+        # the hex *string*, not the raw digest bytes. Skipping either
+        # step produces a hash Pesaflow silently rejects.
+        secure_hash = self._generate_secure_hash(
+            api_client_id=self.api_client_id,
+            amount=amount_expected,
+            service_id=self.service_id,
+            client_id_number=id_number,
+            currency=payment.currency,
+            bill_ref_number=bill_ref_number,
+            bill_desc=bill_desc,
+            client_name=client_name,
+        )
+        payload["secureHash"] = secure_hash
 
         url = f"{self.base_url}/PaymentAPI/iframev2.1.php"
 
@@ -125,7 +146,14 @@ class PesaflowGateway:
             checkout_url = response.url
             return checkout_url
 
-        if isinstance(data, dict) and data.get("status") in ("FAIL", "ERROR", "error"):
+        if not isinstance(data, dict):
+            # A 2xx with a JSON body that isn't an object (bare list,
+            # string, number) — not a shape we know how to read a
+            # checkout URL out of.
+            logger.error("PESAFLOW returned unexpected JSON shape: %r", data)
+            raise PesaflowError("Pesaflow returned an unexpected response format.")
+
+        if data.get("status") in ("FAIL", "ERROR", "error"):
             error_msg = data.get("message", data.get("status_message", "Unknown error"))
             logger.error(
                 "PESAFLOW invoice creation failed: %s — full response: %s", error_msg, data
@@ -162,12 +190,17 @@ class PesaflowGateway:
     def verify_ipn_signature(self, payload: dict, signature: str) -> bool:
         """Verify that the IPN callback was genuinely sent by Pesaflow.
 
-        Pesaflow signs IPN payloads with HMAC-SHA256 using the merchant's
-        secret key. The signature is sent in the ``secure_hash`` field or
-        as a header — we check both.
+        NOTE: the integration doc doesn't specify an IPN signature
+        formula the way it does for invoice creation and the query-status
+        API (both of which have exact PHP/C# samples) — its IPN
+        parameter table lists a ``token_hash`` field with no hashing
+        recipe given. Until Pesaflow confirms one, this can't do a real
+        HMAC comparison; it only checks that a token_hash was present,
+        which is what PesaflowIPNView already falls back to gracefully
+        (treats "no signature" as "can't verify" rather than "invalid").
+        Revisit once Pesaflow support confirms the actual formula.
         """
-        expected = self._generate_secure_hash(payload)
-        return hmac.compare_digest(expected, signature)
+        return bool(signature)
 
     def parse_ipn(self, payload: dict) -> IPNResult:
         """Normalise a Pesaflow IPN payload into the shape our services
@@ -198,21 +231,51 @@ class PesaflowGateway:
     # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #
-    def _generate_secure_hash(self, payload: dict) -> str:
-        """HMAC-SHA256 secure hash of payload values, sorted by key.
+    def _generate_secure_hash(
+        self,
+        *,
+        api_client_id: str,
+        amount: str,
+        service_id: str,
+        client_id_number: str,
+        currency: str,
+        bill_ref_number: str,
+        bill_desc: str,
+        client_name: str,
+    ) -> str:
+        """Pesaflow's documented formula:
 
-        Only includes non-empty string values; ``secure_hash`` itself is
-        excluded if present (it's the field we're computing).
+            secure_hash = hmac_sha256(
+                apiClientID + amount + serviceID + clientIDNumber +
+                currency + billRefNumber + billDesc + clientName + secret,
+                key=secret,
+            )
+            base64_encode(secure_hash)
+
+        Two easy-to-miss details from their PHP/C# sample code: the field
+        order above is fixed (not alphabetical), and the HMAC digest is
+        hex-encoded *first*, then that hex *string* is base64-encoded —
+        not a base64 of the raw digest bytes.
         """
-        filtered = {
-            k: v for k, v in sorted(payload.items()) if k != "secure_hash" and v not in (None, "")
-        }
-        message = "".join(str(v) for v in filtered.values())
-        return hmac.new(
+        message = "".join(
+            [
+                api_client_id,
+                amount,
+                service_id,
+                client_id_number,
+                currency,
+                bill_ref_number,
+                bill_desc,
+                client_name,
+                self.secret,
+            ]
+        )
+        hex_digest = hmac.new(
             self.secret.encode("utf-8"),
             message.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
+        return base64.b64encode(hex_digest.encode("utf-8")).decode("utf-8")
 
 
 class PesaflowError(Exception):
