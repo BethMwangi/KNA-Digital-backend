@@ -63,7 +63,20 @@ class Payment(BaseModel):
     checkout_url = models.URLField(
         max_length=500,
         blank=True,
-        help_text=_("Hosted checkout URL from the payment provider (e.g. Pesaflow iframe)."),
+        help_text=_(
+            "Iframe src for the frontend to embed — our own "
+            "PaymentCheckoutFrameView, not the provider's URL directly."
+        ),
+    )
+    checkout_html = models.TextField(
+        blank=True,
+        help_text=_(
+            "Raw hosted-checkout HTML fetched from the provider once at "
+            "invoice creation (Pesaflow: format=iframe) — served back "
+            "verbatim by PaymentCheckoutFrameView. Not re-fetchable: "
+            "billRefNumber must be unique, so we can't just call the "
+            "provider again if this is missing."
+        ),
     )
     paid_at = models.DateTimeField(null=True, blank=True)
 

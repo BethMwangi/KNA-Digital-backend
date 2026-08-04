@@ -65,7 +65,19 @@ class PesaflowGateway:
         success_redirect_url: str,
         fail_redirect_url: str,  # noqa: ARG002 — no fail-redirect field in Pesaflow's iframe API
     ) -> str:
-        """Create a Pesaflow invoice and return the checkout URL.
+        """Create a Pesaflow invoice and return the hosted checkout page's
+        raw HTML, for the caller to store and serve back through our own
+        endpoint (see PaymentCheckoutFrameView) — never embed Pesaflow's
+        response directly, since the secureHash means this call can only
+        happen server-side.
+
+        format="iframe" (not "json") deliberately: with format="json",
+        Pesaflow returns a JSON body with an "invoice_link" pointing at
+        a *second* URL — which, as tested live, currently 404s with
+        "could not resolve checkout endpoint" in their sandbox.
+        format="iframe" returns the actual working payment page HTML in
+        the same response, matching what their integration doc describes
+        ("consume an iframe via http-post") — no second hop needed.
 
         Raises ``PesaflowError`` on any non-success response so the caller
         can surface a user-friendly message.
@@ -90,7 +102,7 @@ class PesaflowGateway:
             "notificationURL": callback_url,
             "pictureURL": "",
             "sendSTK": "true",
-            "format": "json",
+            "format": "iframe",
         }
 
         # Secure hash: HMAC-SHA256 over these exact values in this exact
@@ -127,61 +139,36 @@ class PesaflowGateway:
             logger.error("PESAFLOW API request failed: %s", exc)
             raise PesaflowError(f"Could not reach Pesaflow: {exc}") from exc
 
-        # Pesaflow may return JSON with an iframe URL or an error.
-        try:
-            data = response.json()
-        except ValueError:
-            # If the response is HTML (the iframe page itself), the URL is
-            # the request URL with the payload encoded — return it.
-            logger.warning(
-                "PESAFLOW returned non-JSON response (likely iframe HTML), "
-                "using request URL as checkout URL."
+        content_type = response.headers.get("content-type", "")
+        if "application/json" in content_type:
+            # A JSON body at this point means an error, not the checkout
+            # page — the happy path with format="iframe" is HTML.
+            try:
+                data = response.json()
+            except ValueError:
+                data = {}
+            error_msg = (
+                data.get("error")
+                or data.get("message")
+                or data.get("status_message")
+                or "Unknown error"
             )
-            # Build the checkout URL with GET params for iframe embedding
-            checkout_url = response.url
-            return checkout_url
-
-        if not isinstance(data, dict):
-            # A 2xx with a JSON body that isn't an object (bare list,
-            # string, number) — not a shape we know how to read a
-            # checkout URL out of.
-            logger.error("PESAFLOW returned unexpected JSON shape: %r", data)
-            raise PesaflowError("Pesaflow returned an unexpected response format.")
-
-        if data.get("status") in ("FAIL", "ERROR", "error"):
-            error_msg = data.get("message", data.get("status_message", "Unknown error"))
             logger.error(
                 "PESAFLOW invoice creation failed: %s — full response: %s", error_msg, data
             )
             raise PesaflowError(f"Pesaflow rejected the invoice: {error_msg}")
 
-        # Successful JSON response should contain the checkout/iframe URL
-        # — confirmed live, their actual field is "invoice_link" (not
-        # documented; the others are speculative fallbacks in case a
-        # different Pesaflow API version uses a different name).
-        checkout_url = (
-            data.get("invoice_link")
-            or data.get("checkout_url")
-            or data.get("iframe_url")
-            or data.get("payment_url")
-            or data.get("url")
-        )
-        if not checkout_url:
-            # Some Pesaflow API versions return the full response URL
-            # as the redirect target when the invoice is created inline.
-            logger.warning(
-                "PESAFLOW JSON response has no explicit checkout URL field: %s — "
-                "falling back to response URL.",
-                data,
-            )
-            checkout_url = response.url
+        html = response.text
+        if not html.strip():
+            logger.error("PESAFLOW returned an empty response body")
+            raise PesaflowError("Pesaflow returned an empty response.")
 
         logger.info(
-            "PESAFLOW invoice created txn=%s checkout_url=%s",
+            "PESAFLOW invoice created txn=%s (received %d bytes of checkout HTML)",
             payment.transaction_id,
-            checkout_url,
+            len(html),
         )
-        return checkout_url
+        return html
 
     # ------------------------------------------------------------------ #
     # IPN (Instant Payment Notification) verification
