@@ -15,6 +15,7 @@ import logging
 import uuid
 
 from django.conf import settings
+from django.http import Http404, HttpResponse
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 
@@ -114,7 +115,7 @@ class PaymentInitiateView(generics.CreateAPIView):
 
         gw = PesaflowGateway()
         try:
-            checkout_url = gw.create_invoice(
+            checkout_html = gw.create_invoice(
                 payment=payment,
                 first_name=billing["first_name"],
                 last_name=billing["last_name"],
@@ -140,12 +141,17 @@ class PaymentInitiateView(generics.CreateAPIView):
             response_data["error"] = str(exc)
             return response_data
 
-        # Store the checkout URL on the payment for reference
-        payment.checkout_url = checkout_url
+        # checkout_url points at OUR OWN endpoint, not Pesaflow directly —
+        # the frontend embeds this in an <iframe src=...>. Pesaflow's raw
+        # HTML is stored once here and served back verbatim by
+        # PaymentCheckoutFrameView (re-calling Pesaflow isn't an option:
+        # billRefNumber must be unique per request).
+        payment.checkout_html = checkout_html
+        payment.checkout_url = f"{backend_url}/api/v1/payments/{payment.id}/checkout-frame/"
         payment.status = Payment.Status.PENDING
-        payment.save(update_fields=["checkout_url", "status", "updated_at"])
+        payment.save(update_fields=["checkout_html", "checkout_url", "status", "updated_at"])
 
-        response_data["checkout_url"] = checkout_url
+        response_data["checkout_url"] = payment.checkout_url
         response_data["status"] = Payment.Status.PENDING
         return response_data
 
@@ -383,3 +389,25 @@ class PaymentDetailView(generics.RetrieveAPIView):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return api_response(message="Payment retrieved.", data=serializer.data)
+
+
+class PaymentCheckoutFrameView(generics.GenericAPIView):
+    """
+    GET /api/v1/payments/{id}/checkout-frame/ — serves the hosted
+    checkout HTML for the frontend to embed via <iframe src=...>.
+
+    Unauthenticated by design: this is meant to be loaded directly by
+    the browser as an iframe's src, which won't carry our JWT bearer
+    token. The payment id is an unguessable UUID, and the content is a
+    generic payment form (no card numbers or secrets) — same trust
+    model as e.g. a Stripe Checkout session URL.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    queryset = Payment.objects.all()
+
+    def get(self, request, pk):
+        payment = self.get_queryset().filter(pk=pk).first()
+        if payment is None or not payment.checkout_html:
+            raise Http404("No checkout page available for this payment.")
+        return HttpResponse(payment.checkout_html, content_type="text/html")
