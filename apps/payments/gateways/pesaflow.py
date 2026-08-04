@@ -12,7 +12,6 @@ Usage:
     status, txn_id, raw = gw.parse_ipn(payload)
 """
 
-import base64
 import hashlib
 import hmac
 import logging
@@ -76,11 +75,6 @@ class PesaflowGateway:
         bill_ref_number = payment.transaction_id
         bill_desc = f"Order {payment.order.order_number}"
 
-        # Field names below must match Pesaflow's documented iframe API
-        # exactly (apiClientID, serviceID, clientMSISDN, ... — not our
-        # own naming convention). A near-miss here gets silently
-        # rejected with a generic "invalid params" error, not a helpful
-        # one, so this has to be exact.
         payload = {
             "apiClientID": self.api_client_id,
             "serviceID": self.service_id,
@@ -91,17 +85,18 @@ class PesaflowGateway:
             "clientName": client_name,
             "clientIDNumber": id_number,
             "clientEmail": email,
-            "callBackURLONSuccess": success_redirect_url,
+            "callBackURLOnSuccess": success_redirect_url,
             "amountExpected": amount_expected,
             "notificationURL": callback_url,
+            "pictureURL": "",
+            "sendSTK": "true",
             "format": "json",
         }
 
         # Secure hash: HMAC-SHA256 over these exact values in this exact
-        # order (per Pesaflow's docs), hex-digested, THEN base64-encoded
-        # — their PHP/C# sample code both hex-encode first and base64
-        # the hex *string*, not the raw digest bytes. Skipping either
-        # step produces a hash Pesaflow silently rejects.
+        # showing base64_encode() of the hex digest, a real example from
+        # their support team is a plain 64-char hex string with no
+        # base64 step — trusting the live example over the doc sample.
         secure_hash = self._generate_secure_hash(
             api_client_id=self.api_client_id,
             amount=amount_expected,
@@ -126,7 +121,7 @@ class PesaflowGateway:
         )
 
         try:
-            response = requests.post(url, data=payload, timeout=REQUEST_TIMEOUT)
+            response = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
         except requests.RequestException as exc:
             logger.error("PESAFLOW API request failed: %s", exc)
@@ -161,8 +156,12 @@ class PesaflowGateway:
             raise PesaflowError(f"Pesaflow rejected the invoice: {error_msg}")
 
         # Successful JSON response should contain the checkout/iframe URL
+        # — confirmed live, their actual field is "invoice_link" (not
+        # documented; the others are speculative fallbacks in case a
+        # different Pesaflow API version uses a different name).
         checkout_url = (
-            data.get("checkout_url")
+            data.get("invoice_link")
+            or data.get("checkout_url")
             or data.get("iframe_url")
             or data.get("payment_url")
             or data.get("url")
@@ -243,19 +242,24 @@ class PesaflowGateway:
         bill_desc: str,
         client_name: str,
     ) -> str:
-        """Pesaflow's documented formula:
+        """Pesaflow's formula:
 
             secure_hash = hmac_sha256(
                 apiClientID + amount + serviceID + clientIDNumber +
                 currency + billRefNumber + billDesc + clientName + secret,
-                key=secret,
+                key=key,
             )
-            base64_encode(secure_hash)
 
-        Two easy-to-miss details from their PHP/C# sample code: the field
-        order above is fixed (not alphabetical), and the HMAC digest is
-        hex-encoded *first*, then that hex *string* is base64-encoded —
-        not a base64 of the raw digest bytes.
+        A plain lowercase hex digest — confirmed against a real working
+        example from Pesaflow's support team (64 hex chars, no base64).
+        Their PHP/C# integration-doc sample showed base64_encode() of
+        the digest, but that doc has already proven unreliable on
+        field-name casing too, so the live example wins.
+
+        The HMAC *key* parameter is a separate credential (PESAFLOW_KEY)
+        from the *secret* that gets concatenated into the message itself
+        (PESAFLOW_SECRET) — using one value for both silently produces a
+        wrong hash. The field order above is fixed, not alphabetical.
         """
         message = "".join(
             [
@@ -270,12 +274,11 @@ class PesaflowGateway:
                 self.secret,
             ]
         )
-        hex_digest = hmac.new(
-            self.secret.encode("utf-8"),
+        return hmac.new(
+            self.key.encode("utf-8"),
             message.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
-        return base64.b64encode(hex_digest.encode("utf-8")).decode("utf-8")
 
 
 class PesaflowError(Exception):
