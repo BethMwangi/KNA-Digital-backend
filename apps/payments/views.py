@@ -16,6 +16,8 @@ import uuid
 
 from django.conf import settings
 from django.http import Http404, HttpResponse
+from django.utils.decorators import method_decorator
+from django.views.decorators.clickjacking import xframe_options_exempt
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 
@@ -401,11 +403,20 @@ class PaymentCheckoutFrameView(generics.GenericAPIView):
     token. The payment id is an unguessable UUID, and the content is a
     generic payment form (no card numbers or secrets) — same trust
     model as e.g. a Stripe Checkout session URL.
+
+    xframe_options_exempt is required here: Django's
+    XFrameOptionsMiddleware (config/settings/base.py) stamps
+    X-Frame-Options: DENY on every response by default, which makes
+    browsers refuse to render this page inside an <iframe> on the
+    frontend's (different) origin — the frontend's iframe silently
+    fails to load with no visible error. This view is the one
+    deliberate exception: it's built to be framed.
     """
 
     permission_classes = [permissions.AllowAny]
     queryset = Payment.objects.all()
 
+    @method_decorator(xframe_options_exempt)
     def get(self, request, pk):
         payment = self.get_queryset().filter(pk=pk).first()
         if payment is None or not payment.checkout_html:
