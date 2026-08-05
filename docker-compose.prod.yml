@@ -12,8 +12,11 @@
 #   - backend only binds to 127.0.0.1:8000 — nginx is the only thing
 #     that talks to it directly; nothing is reachable from the public
 #     internet except through nginx on 80/443
-#   - a persistent media volume, since files now live on this host's
-#     disk instead of Supabase Storage (see core/storage.py)
+#   - media is a host bind-mount (/srv/urithi/media), not a named Docker
+#     volume — nginx serves public thumbnails and X-Accel-Redirects
+#     private downloads directly from disk (see nginx site config), which
+#     needs a stable host path rather than Docker's internal volume
+#     storage under /var/lib/docker/volumes/...
 services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -49,7 +52,7 @@ services:
     build: .
     env_file: .env
     volumes:
-      - media_data:/app/media
+      - /srv/urithi/media:/app/media
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -66,7 +69,7 @@ services:
     command: celery -A config worker -l info --concurrency 2
     env_file: .env
     volumes:
-      - media_data:/app/media
+      - /srv/urithi/media:/app/media
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -78,4 +81,3 @@ volumes:
   rabbitmqdata:
   redisdata:
   meilidata:
-  media_data:
