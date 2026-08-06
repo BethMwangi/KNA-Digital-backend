@@ -10,9 +10,12 @@ payments/emails.py) works unchanged — only settings.EMAIL_BACKEND changes.
 """
 
 import logging
+import ssl
 
 import requests
 from django.core.mail.backends.base import BaseEmailBackend
+from django.core.mail.backends.smtp import EmailBackend as SMTPEmailBackend
+from django.utils.functional import cached_property
 
 logger = logging.getLogger(__name__)
 
@@ -69,3 +72,17 @@ class ResendEmailBackend(BaseEmailBackend):
                 if not self.fail_silently:
                     raise
         return sent
+
+
+class VerificationOptionalSMTPEmailBackend(SMTPEmailBackend):
+    @cached_property
+    def ssl_context(self):
+        from django.conf import settings
+
+        if getattr(settings, "EMAIL_SSL_VERIFY", True):
+            return super().ssl_context
+
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        return context

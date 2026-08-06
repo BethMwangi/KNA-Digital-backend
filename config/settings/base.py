@@ -164,12 +164,28 @@ CORS_ALLOWED_ORIGIN_REGEXES = [r"^https://.*\.vercel\.app$"]
 # normal network. Resend's HTTPS API sidesteps the block entirely and is
 # free for this volume (100/day, 3,000/month).
 # ------------------------------------------------------------------ #
-EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
-EMAIL_HOST = env("EMAIL_HOST", default="")
-EMAIL_PORT = env.int("EMAIL_PORT", default=587)
-EMAIL_HOST_USER = env("EMAIL_USERNAME", default="")
-EMAIL_HOST_PASSWORD = env("EMAIL_PASSWORD", default="")
-EMAIL_USE_TLS = True
+MAIL_MAILER = env("MAIL_MAILER", default="")
+EMAIL_SSL_VERIFY = env.bool("EMAIL_SSL_VERIFY", default=env.bool("MAIL_SSL_VERIFY", default=True))
+EMAIL_BACKEND = env(
+    "EMAIL_BACKEND",
+    default=(
+        "django.core.mail.backends.smtp.EmailBackend"
+        if MAIL_MAILER.lower() == "smtp"
+        else "django.core.mail.backends.console.EmailBackend"
+    ),
+)
+if MAIL_MAILER.lower() == "smtp" and not EMAIL_SSL_VERIFY:
+    EMAIL_BACKEND = env(
+        "EMAIL_BACKEND", default="core.email_backends.VerificationOptionalSMTPEmailBackend"
+    )
+EMAIL_HOST = env("EMAIL_HOST", default=env("MAIL_HOST", default=""))
+EMAIL_PORT = env.int("EMAIL_PORT", default=env.int("MAIL_PORT", default=587))
+EMAIL_HOST_USER = env("EMAIL_USERNAME", default=env("MAIL_USERNAME", default=""))
+EMAIL_HOST_PASSWORD = env("EMAIL_PASSWORD", default=env("MAIL_PASSWORD", default=""))
+EMAIL_USE_TLS = env.bool(
+    "EMAIL_USE_TLS",
+    default=env("MAIL_ENCRYPTION", default="tls").lower() in {"tls", "starttls"},
+)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@archive.kna.go.ke")
 RESEND_API_KEY = env("RESEND_API_KEY", default="")
 
