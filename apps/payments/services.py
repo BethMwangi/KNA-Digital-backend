@@ -72,7 +72,7 @@ def complete_payment(payment: Payment, *, provider_response: dict | None = None)
         already_owned,
     )
 
-    transaction.on_commit(lambda: _send_success_email(order.id))
+    transaction.on_commit(lambda: _after_successful_payment(order.id, payment.id))
     return payment
 
 
@@ -97,6 +97,16 @@ def fail_payment(payment: Payment, *, provider_response: dict | None = None) -> 
 
     transaction.on_commit(lambda: _send_failure_email(payment.order.id))
     return payment
+
+
+def _after_successful_payment(order_id, payment_id) -> None:
+    from apps.commerce.models import Order
+    from apps.downloads.urithi import sync_order_download_links
+
+    order = Order.objects.select_related("user").get(id=order_id)
+    payment = Payment.objects.get(id=payment_id)
+    sync_order_download_links(order, payment)
+    _send_success_email(order_id)
 
 
 def _send_success_email(order_id) -> None:

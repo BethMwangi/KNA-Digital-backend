@@ -52,6 +52,12 @@ class Download(BaseModel):
         default=5,
         help_text=_("Maximum number of times this file can be downloaded."),
     )
+    external_download_status = models.CharField(max_length=50, blank=True)
+    external_download_link = models.URLField(max_length=1000, blank=True)
+    external_download_counts = models.PositiveIntegerField(null=True, blank=True)
+    external_payload = models.JSONField(default=dict, blank=True)
+    external_response = models.JSONField(default=dict, blank=True)
+    external_last_error = models.TextField(blank=True)
 
     class Meta:
         db_table = "downloads"
@@ -67,6 +73,8 @@ class Download(BaseModel):
 
     @property
     def can_download(self):
+        if self.external_download_status == "limit_exceeded":
+            return False
         return self.download_count < self.max_downloads
 
     def generate_signed_url(self, variant: AssetVariant, expires_in: int = 3600) -> str:

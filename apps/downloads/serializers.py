@@ -35,5 +35,8 @@ class DownloadSerializer(serializers.ModelSerializer):
             "max_downloads",
             "downloads_remaining",
             "can_download",
+            "external_download_status",
+            "external_download_link",
+            "external_download_counts",
             "created_at",
         ]

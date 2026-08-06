@@ -296,3 +296,8 @@ PESAFLOW_KEY = env("PESAFLOW_KEY", default="")
 PESAFLOW_SECRET = env("PESAFLOW_SECRET", default="")
 PESAFLOW_API_CLIENT_ID = env("PESAFLOW_API_CLIENT_ID", default="")
 PESAFLOW_BASE_URL = env("PESAFLOW_BASE_URL", default="https://test.pesaflow.com")
+
+URITHI_DOWNLOAD_LINK_ENDPOINT = env(
+    "URITHI_DOWNLOAD_LINK_ENDPOINT",
+    default="https://urithi.kenyanews.go.ke/api/assets/getdownlink",
+)

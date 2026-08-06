@@ -65,6 +65,7 @@ class DownloadLinkView(generics.GenericAPIView):
             200: inline_serializer(
                 name="DownloadLinkResponse",
                 fields={
+                    "url": serializers.URLField(),
                     "download_url": serializers.URLField(),
                     "file_name": serializers.CharField(),
                     "mime_type": serializers.CharField(),
@@ -91,6 +92,21 @@ class DownloadLinkView(generics.GenericAPIView):
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
+        if download.external_download_link:
+            return api_response(
+                message="Download link generated.",
+                data={
+                    "url": download.external_download_link,
+                    "download_url": download.external_download_link,
+                    "file_name": download.asset.asset_number or download.asset.title,
+                    "mime_type": "",
+                    "file_size": 0,
+                    "downloads_remaining": download.downloads_remaining,
+                    "external_status": download.external_download_status,
+                    "external_download_counts": download.external_download_counts,
+                },
+            )
+
         # Get the high-res variant for this asset
         variant = AssetVariant.objects.filter(
             asset=download.asset,
@@ -114,6 +130,7 @@ class DownloadLinkView(generics.GenericAPIView):
         return api_response(
             message="Download link generated.",
             data={
+                "url": signed_url,
                 "download_url": signed_url,
                 "file_name": f"{download.asset.asset_number}.{variant.mime_type.split('/')[-1]}",
                 "mime_type": variant.mime_type,
