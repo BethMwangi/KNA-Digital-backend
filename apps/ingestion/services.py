@@ -172,11 +172,12 @@ def _map_fields(asset: DigitalAsset, rec: dict) -> None:
     asset.status = DigitalAsset.Status.PUBLISHED if has_preview else DigitalAsset.Status.DRAFT
     asset.visibility = DigitalAsset.Visibility.PUBLIC
 
-    # Flat launch price so seeded assets are purchasable immediately.
-    # Only fills the gap — editor-set prices are never overwritten
+    # Prefer the source's own per-image price ("image_cost"); fall back
+    # to the flat launch price only when the feed has none. Either way,
+    # only fills the gap — editor-set prices are never overwritten
     # (use set_prices for bulk repricing / the old-vs-new split later).
     if asset.price is None:
-        asset.price = settings.ASSET_DEFAULT_PRICE
+        asset.price = nz.parse_decimal(rec.get("image_cost")) or settings.ASSET_DEFAULT_PRICE
 
 
 def _map_metadata(asset: DigitalAsset, rec: dict) -> None:

@@ -9,6 +9,7 @@ import hashlib
 import json
 import re
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 # Windows-1252-as-UTF-8 double-encoding artefacts seen in the source
 MOJIBAKE = {
@@ -121,6 +122,22 @@ def parse_date(value: str | None) -> date | None:
         except ValueError:
             continue
     return None
+
+
+def parse_decimal(value) -> Decimal | None:
+    """ "image_cost" arrives as a numeric-looking value ("2500.00", or a
+    bare number) — convert straight to Decimal so it's stored and
+    serialized as a real number (DigitalAsset.price is a DecimalField,
+    and COERCE_DECIMAL_TO_STRING=False emits it as a JSON number, not a
+    string). Missing/zero/unparseable means the source has no real price
+    for this record."""
+    if value in (None, ""):
+        return None
+    try:
+        parsed = Decimal(value)
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    return parsed if parsed > 0 else None
 
 
 COUNTRY_MAP = {"KEN": "Kenya", "UGA": "Uganda", "TZA": "Tanzania"}
